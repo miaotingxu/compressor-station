@@ -1,0 +1,38 @@
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: #f0f2f7;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.page-container { padding: 16px 20px 32px; max-width: 1560px; margin: 0 auto; }
+.page-title { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+.page-subtitle { color: rgba(0,0,0,0.45); font-size: 12.5px; margin-bottom: 16px; }
+
+.card-grid { display: grid; gap: 12px; }
+.stat-value { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat-unit { font-size: 13px; font-weight: 400; color: rgba(0,0,0,0.45); margin-left: 2px; }
+
+.mono { font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, Consolas, monospace; }
+
+.demo-banner {
+  display: flex; align-items: center; gap: 8px;
+  background: linear-gradient(90deg, #fffbe6, #fffde8);
+  border-bottom: 1px solid #ffe7a6;
+  padding: 4px 20px; font-size: 12.5px; color: #874d00;
+}
+
+.section-title { font-size: 15px; font-weight: 600; margin: 20px 0 10px; display: flex; align-items: center; gap: 8px; }
+.section-title::before { content: ''; width: 3px; height: 14px; background: #1d4ed8; border-radius: 2px; display: inline-block; }
+
+.evidence-list { margin: 0; padding-left: 18px; }
+.evidence-list li { margin-bottom: 4px; color: rgba(0,0,0,0.72); line-height: 1.7; }
+
+.chat-agent-card { background: #f6f9ff; border: 1px solid #dbe7ff; border-radius: 8px; padding: 12px 14px; max-width: 86%; }
+.chat-user-card { background: #1d4ed8; color: #fff; border-radius: 8px; padding: 10px 14px; max-width: 70%; }
+
+@media (max-width: 900px) {
+  .page-container { padding: 12px; }
+  .stat-value { font-size: 22px; }
+}
