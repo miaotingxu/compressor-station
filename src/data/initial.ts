@@ -8,7 +8,7 @@ import { STATION } from './stationConfig'
 import { assessHealth } from '../utils/health'
 
 /**
- * 真实站点数据基准日：主办方数据包时间范围的末尾。
+ * 真实站点数据基准日：数据包时间范围的末尾。
  * 原演示程序以「应用加载时刻」为基准，真实数据为 2026-03-12 ~ 2026-09-12 的历史归档，
  * 因此这里统一以数据末尾作为站点状态的基准时刻。
  */
@@ -127,13 +127,13 @@ export const ALERTS: Alert[] = [
     id: 'AL-20260912-005', deviceId: 'AC-05', level: 'warning', type: 'data_quality',
     title: '加卸载与预警字段缺失',
     description: '运行事件记录中 4#/5# 加卸载字段全程为空、预警字段全程为 0，无法还原加减载时序与预警记录。',
-    raisedAt: ago(12), status: 'confirmed', confirmedBy: '张伟', confirmedAt: ago(11),
+    raisedAt: ago(12), status: 'confirmed', confirmedBy: '苗先生', confirmedAt: ago(11),
   },
   {
     id: 'AL-20260911-006', deviceId: 'AC-04', level: 'info', type: 'pressure',
     title: '母管压力短时波动',
     description: '全周期母管压力 5%~99% 区间为 5.0~6.4 bar，最低 4.8 bar、最高 7.1 bar，合格带按 5.0~6.4 bar 统计合格率约 94.8%。',
-    raisedAt: ago(30), status: 'closed', confirmedBy: '张伟', confirmedAt: ago(29),
+    raisedAt: ago(30), status: 'closed', confirmedBy: '苗先生', confirmedAt: ago(29),
     conclusion: '波动与批次用气及机组轮换相关，属工艺性波动，已纳入压力合格率统计口径。', closedAt: ago(28),
   },
 ]
@@ -221,7 +221,7 @@ export const PLANS: SchedulePlan[] = [
       '压力合格带按真实母管压力 5%~99% 分位取 5.0~6.4 bar',
     ],
     evidencePeriod: `${ago(48)} ~ ${ago(0)}（真实历史数据）`, createdBy: 'Agent 调度引擎 v1.0',
-    approvedBy: '张伟', approvedAt: ago(51), batchId: 'B-20260910',
+    approvedBy: '苗先生', approvedAt: ago(51), batchId: 'B-20260910',
     receipts: [
       { deviceId: 'AC-04', command: '加载率调整至 82%', result: 'success', message: '导叶 IGV 调节完成', latencyMs: 2100, finishedAt: ago(51.8) },
       { deviceId: 'AC-05', command: '加载率调整至 88%', result: 'success', message: '导叶 IGV 调节完成', latencyMs: 1980, finishedAt: ago(51.7) },
@@ -243,7 +243,7 @@ export const PLANS: SchedulePlan[] = [
     risks: { surgeRisk: 'low', overloadRisk: 'low', healthRisk: 'low', pressureRiskText: '夜间负荷波动较大，压力合格率略降' },
     explanation: ['夜间用气负荷下探，通过降载减少无效出力', '依据真实数据末尾一日同时段负荷形态推演'],
     evidencePeriod: `${ago(72)} ~ ${ago(24)}`, createdBy: 'Agent 调度引擎 v1.0',
-    approvedBy: '李静', approvedAt: ago(27.6), batchId: 'B-20260911',
+    approvedBy: '苗先生', approvedAt: ago(27.6), batchId: 'B-20260911',
     receipts: [
       { deviceId: 'AC-05', command: '加载率调整至 70%', result: 'success', message: '调节完成', latencyMs: 1320, finishedAt: ago(27.4) },
       { deviceId: 'AC-04', command: '加载率调整至 60%', result: 'timeout', message: '控制网关未在 10s 内返回回执，执行状态未知', latencyMs: 10000, finishedAt: ago(27.3) },
@@ -297,13 +297,13 @@ export const STRATEGIES: StrategyVersion[] = [
     id: 'STG-V1.0.0', version: 'V1.0.0', name: '基础稳供策略', status: 'archived',
     description: '初始版本：固定压力带 5.0~6.6 bar，按额定功率顺序启停，无健康度约束。',
     params: { minLoadRatePct: 60, maxLoadRatePct: 95, pressureBandBar: [5.0, 6.6], surgeMarginPct: 8, priority: 'stability', autoLearnEnabled: false },
-    createdAt: '2026-08-01 10:00:00', createdBy: '陈明', releasedAt: '2026-08-01 10:30:00', rolledBackAt: '2026-08-20 15:00:00',
+    createdAt: '2026-08-01 10:00:00', createdBy: '苗先生', releasedAt: '2026-08-01 10:30:00', rolledBackAt: '2026-08-20 15:00:00',
   },
   {
     id: 'STG-V1.1.0', version: 'V1.1.0', name: '能效优先 + 健康约束策略', status: 'active',
     description: '当前生效版本：基于真实负荷数据的负载再分配，压力带收窄至 5.0~6.4 bar，叠加设备健康度约束，人工审批后下发。',
     params: { minLoadRatePct: 65, maxLoadRatePct: 92, pressureBandBar: [5.0, 6.4], surgeMarginPct: 10, priority: 'balanced', autoLearnEnabled: true },
-    createdAt: '2026-08-20 14:00:00', createdBy: '陈明', releasedAt: '2026-08-20 15:00:00',
+    createdAt: '2026-08-20 14:00:00', createdBy: '苗先生', releasedAt: '2026-08-20 15:00:00',
     replay: { period: '2026-08-06 ~ 2026-08-19', energySavingPct: 2.6, pressureQualifyPct: 96.1, loadRateDeviationPct: 8.4, verdict: 'pass', notes: '14 天真实数据回放：同产气口径能耗下降 2.6%，压力合格率 96.1%，通过验证' },
   },
   {
@@ -316,7 +316,7 @@ export const STRATEGIES: StrategyVersion[] = [
 ]
 
 // ================= 数据源与数据质量 =================
-// 数据源清单由主办方真实文件推导：协议=文件类型，点位数=字段数，质量=测点平均覆盖率
+// 数据源清单由真实文件推导：协议=文件类型，点位数=字段数，质量=测点平均覆盖率
 export const DATA_SOURCES: DataSource[] = REAL.assets.map((a, i) => {
   const own = REAL.points.filter(p => p.file === a.file)
   const quality = own.length ? +(own.reduce((s, p) => s + p.coveragePct, 0) / own.length).toFixed(1) : 100
@@ -357,19 +357,19 @@ export const ROLE_DEFS: RoleDef[] = [
 ]
 
 export const MEMBERS: Member[] = [
-  { id: 'M-001', name: '张伟', role: 'operator', account: 'zhangwei', phone: '138****2168', sites: ['AS-01'], active: true },
-  { id: 'M-002', name: '李静', role: 'operator', account: 'lijing', phone: '139****5521', sites: ['AS-01'], active: true },
+  { id: 'M-001', name: '苗先生', role: 'operator', account: 'zhangwei', phone: '138****2168', sites: ['AS-01'], active: true },
+  { id: 'M-002', name: '苗先生', role: 'operator', account: 'lijing', phone: '139****5521', sites: ['AS-01'], active: true },
   { id: 'M-003', name: '王芳', role: 'energy_manager', account: 'wangfang', phone: '137****8834', sites: ['AS-01'], active: true },
   { id: 'M-004', name: '刘强', role: 'device_engineer', account: 'liuqiang', phone: '136****9027', sites: ['AS-01'], active: true },
   { id: 'M-005', name: '赵勇', role: 'device_engineer', account: 'zhaoyong', phone: '135****4413', sites: ['AS-01'], active: true },
-  { id: 'M-006', name: '陈明', role: 'admin', account: 'chenming', phone: '138****7745', sites: ['AS-01'], active: true },
+  { id: 'M-006', name: '苗先生', role: 'admin', account: 'chenming', phone: '138****7745', sites: ['AS-01'], active: true },
 ]
 
 // ================= 审计日志（预置） =================
 export const AUDIT_LOGS: AuditLog[] = [
   { id: 'LOG-9001', time: ago(54), actor: '系统', role: 'admin', action: '策略发布', target: 'V1.1.0', detail: 'V1.1.0 策略回放验证通过后发布生效', result: 'success' },
-  { id: 'LOG-9002', time: ago(51.9), actor: '张伟', role: 'operator', action: '调度下发', target: 'PLAN-20260910-001', detail: '2 台设备指令全部成功下发，逐台回执确认', result: 'success' },
-  { id: 'LOG-9003', time: ago(28), actor: '李静', role: 'operator', action: '方案审批', target: 'PLAN-20260911-002', detail: '批准 09-11 夜间负载下探方案', result: 'success' },
+  { id: 'LOG-9002', time: ago(51.9), actor: '苗先生', role: 'operator', action: '调度下发', target: 'PLAN-20260910-001', detail: '2 台设备指令全部成功下发，逐台回执确认', result: 'success' },
+  { id: 'LOG-9003', time: ago(28), actor: '苗先生', role: 'operator', action: '方案审批', target: 'PLAN-20260911-002', detail: '批准 09-11 夜间负载下探方案', result: 'success' },
   { id: 'LOG-9004', time: ago(27.3), actor: '系统', role: 'admin', action: '执行回执超时', target: 'AC-04', detail: '4# 控制网关 10s 未回执，方案标记为"状态未知"，已创建异常待办', result: 'success' },
   { id: 'LOG-9005', time: ago(10), actor: '王芳', role: 'energy_manager', action: '调度下发（越权尝试）', target: 'PLAN-20260911-002', detail: '能源负责人无控制下发权限，系统拒绝并生成审计记录', result: 'denied' },
   { id: 'LOG-9006', time: ago(6), actor: '赵勇', role: 'device_engineer', action: '工单复测提交', target: 'WO-20260911-002', detail: '提交 4# 冷却系统复测数据：排气温度峰值 99℃，合格', result: 'success' },

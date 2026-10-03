@@ -1,5 +1,5 @@
 // 真实的设备健康评分与风险判定算法。
-// 输入为主办方真实测点的统计量（振动/绕组/轴承/排气温度、油压、BOV 闭度、IGV 开度），
+// 输入为真实测点的统计量（振动/绕组/轴承/排气温度、油压、BOV 闭度、IGV 开度），
 // 输出健康分、喘振风险与可解释的判定依据，替代原先写死的常量。
 import type { RiskLevel } from '../types'
 import { HEALTH_THRESHOLDS as T, SURGE_THRESHOLDS as S } from '../data/stationConfig'

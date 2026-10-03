@@ -149,7 +149,7 @@ export default function HealthPage() {
             </Descriptions>
             <div style={{ marginTop: 12 }}>
               <Chart option={trendOpt} height={220} />
-              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>截至数据时刻的最近 48 小时振动与轴承温度趋势（主办方真实数据，小时级）。红色虚线为报警阈值。</div>
+              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>截至数据时刻的最近 48 小时振动与轴承温度趋势（真实数据，小时级）。红色虚线为报警阈值。</div>
             </div>
           </Card>
 

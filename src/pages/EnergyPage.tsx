@@ -92,7 +92,7 @@ export default function EnergyPage() {
         ['对比基线', `基线期实测系统比功率 ${baseSE || BASELINE_METRICS.specificEnergy} kWh/m³（真实数据计算）`],
         ['计算式', `比功率变化 = (近期比功率 − 基线比功率) / 基线比功率；节电量按两期累计产气量折算，电价 0.8 元/kWh`],
         ['关联调度方案', 'PLAN-20260910-001（已执行复盘）；PLAN-20260911-002（执行异常待处置）'],
-        ['口径说明', '主办方提供的是连续运行的历史归档，不含 AI 调度干预前后对照，因此此处为真实数据两期对比，不能等同于 AI 节能收益'],
+        ['口径说明', '该数据为连续运行的历史归档，不含 AI 调度干预前后对照，因此此处为真实数据两期对比，不能等同于 AI 节能收益'],
         ['可信度说明', '数据源为真实数据包；B 相电流等字段存在缺失，已在使用中剔除，其余点位参与统计'],
       ],
     })
@@ -101,7 +101,7 @@ export default function EnergyPage() {
   return (
     <div className="page-container">
       <h1 className="page-title">能效与收益<DemoTag /></h1>
-      <div className="page-subtitle">基于主办方真实数据（2026-03-12 ~ 2026-09-12）。区分「赛题目标值 / 真实计算值 / 基线期」，每一项均可追溯。</div>
+      <div className="page-subtitle">基于真实数据（2026-03-12 ~ 2026-09-12）。区分「赛题目标值 / 真实计算值 / 基线期」，每一项均可追溯。</div>
 
       <DemoAlertInline />
 
@@ -158,7 +158,7 @@ export default function EnergyPage() {
       )}
 
       {/* 赛题指标 */}
-      <SectionTitle extra={<span style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>可持续计算的指标取自真实数据；其余保留赛题目标口径</span>}>主办方指标达成（赛题目标 vs 当前值 vs 基线）</SectionTitle>
+      <SectionTitle extra={<span style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>可持续计算的指标取自真实数据；其余保留赛题目标口径</span>}>指标达成（赛题目标 vs 当前值 vs 基线）</SectionTitle>
       <Card size="small">
         <Table
           size="small" rowKey="key" pagination={false}
@@ -178,7 +178,7 @@ export default function EnergyPage() {
             { title: '追溯', dataIndex: 'source', render: v => <Tooltip title={v}><span style={{ fontSize: 12, color: '#1d4ed8' }}>{v.length > 24 ? v.slice(0, 24) + '…' : v}</span></Tooltip> },
           ]}
         />
-        <Alert style={{ marginTop: 10 }} type="info" showIcon message="口径说明" description={<span style={{ fontSize: 12.5 }}>标注「真实数据」的指标由主办方真实数据计算；标注「赛题目标」的指标在提供的数据包中没有对应测点，仅保留目标口径展示。</span>} />
+        <Alert style={{ marginTop: 10 }} type="info" showIcon message="口径说明" description={<span style={{ fontSize: 12.5 }}>标注「真实数据」的指标由真实数据计算；标注「赛题目标」的指标在提供的数据包中没有对应测点，仅保留目标口径展示。</span>} />
       </Card>
 
       {/* 收益明细弹窗 */}
@@ -194,7 +194,7 @@ export default function EnergyPage() {
           <Button key="e" type="primary" icon={<DownloadOutlined />} onClick={() => message.success('月度能效报告已导出（演示环境模拟导出）')}>导出报告</Button>,
         ]}
       >
-        <Alert style={{ marginBottom: 10 }} type="info" showIcon icon={<ExperimentOutlined />} message={<>本报告基于<b>主办方真实数据</b>生成 · 数据范围：{MONTHLY_REPORT.dataRange}</>} />
+        <Alert style={{ marginBottom: 10 }} type="info" showIcon icon={<ExperimentOutlined />} message={<>本报告基于<b>真实数据</b>生成 · 数据范围：{MONTHLY_REPORT.dataRange}</>} />
         <Table
           size="small" rowKey="name" pagination={false}
           dataSource={MONTHLY_REPORT.metrics}

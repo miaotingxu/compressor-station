@@ -66,7 +66,7 @@ export function AppLayout() {
     <Layout style={{ minHeight: '100vh' }}>
       <div className="demo-banner">
         <Tag color="gold" style={{ marginRight: 4 }}>演示环境</Tag>
-        <span>空压站多机协同智能调度 Agent · {SITE.factory} · {SITE.name} —— 运行数据来自主办方真实数据包，调度与控制流程为演示逻辑</span>
+        <span>空压站多机协同智能调度 Agent · {SITE.name} —— 运行数据来自真实数据包，调度与控制流程为演示逻辑</span>
       </div>
       <Layout>
         <Layout.Sider theme="dark" collapsible collapsed={collapsed} trigger={null} width={216} style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
@@ -94,7 +94,7 @@ export function AppLayout() {
             <Space size={12}>
               <Select
                 value="AS-01" style={{ width: 210 }} size="small"
-                options={[{ value: 'AS-01', label: `${SITE.factory} · ${SITE.name}` }]}
+                options={[{ value: 'AS-01', label: SITE.name }]}
                 popupRender={n => (
                   <div style={{ padding: 8 }}>
                     {n}

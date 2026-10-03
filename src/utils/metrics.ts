@@ -15,7 +15,7 @@ export interface MetricDef {
   dataRange: string
   source: string
   reached: boolean
-  /** real = 由主办方真实数据计算；target = 数据包不支撑，仅保留赛题目标口径 */
+  /** real = 由真实数据计算；target = 数据包不支撑，仅保留赛题目标口径 */
   dataBasis: 'real' | 'target'
 }
 
@@ -30,7 +30,7 @@ const pstd = REAL.metrics.pressureStd
 const pressureSwingDown = +(((pstd.baseline - pstd.current) / pstd.baseline) * 100).toFixed(1)
 
 // 无真实数据支撑的赛题目标项统一样式
-const targetBasis = '赛题目标口径（主办方数据包不含该指标，保留目标值展示）'
+const targetBasis = '赛题目标口径（数据包不含该指标，保留目标值展示）'
 
 export function metricDefs(): MetricDef[] {
   const defs: MetricDef[] = [

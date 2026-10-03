@@ -1,5 +1,5 @@
-// 主办方真实数据集的类型化封装。
-// 数据由 scripts/build_real_dataset.py 从 9 个主办方数据文件预处理生成，
+// 真实数据集的类型化封装。
+// 数据由 scripts/build_real_dataset.py 从 9 个原始数据文件预处理生成，
 // 输出到 public/data/realDataset.json，由 main.tsx 在启动时 fetch 并注入 window。
 // 替换数据包只需覆盖该 JSON，无需重新构建。
 

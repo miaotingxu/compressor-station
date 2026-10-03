@@ -3,7 +3,7 @@
 import { REAL } from './realDataset'
 
 export const STATION = {
-  factory: '主办方空压站',
+  factory: '空压站',
   name: '1 号空压站',
   id: 'AS-01',
   region: '真实数据集',

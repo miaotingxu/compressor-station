@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-把主办方提供的 9 个真实数据文件，预处理为前端可直接消费的精简数据集。
+把 9 个真实数据文件，预处理为前端可直接消费的精简数据集。
 
-输入：仓库根目录下的主办方数据包
+输入：仓库根目录下的数据包
   - 设备运行参数.csv / 设备状态监测.csv / 用气负荷数据.csv
   - 环境参数.xlsx / 管网运行数据.xlsx / 维护保养记录.xlsx / 运行事件记录.xlsx
   - 设备档案.json / 指标释义.json
@@ -340,7 +340,7 @@ def main():
         quality.append({"source": "用气负荷数据.csv", "metric": "负荷率", "type": "outlier",
                         "severity": "warning", "detail": f"负荷率有 {neg_level} 条记录超过 100%（最高 111%），与额定总流量 537.8 m³/min 口径不一致。"})
 
-    # ---------- 全量测点统计与应用文件清单（让主办方数据尽可能可见） ----------
+    # ---------- 全量测点统计与应用文件清单（让真实数据尽可能可见） ----------
     file_map = [
         ("设备运行参数", op, "设备运行参数.csv", "CSV"),
         ("设备状态监测", st, "设备状态监测.csv", "CSV"),
@@ -399,7 +399,7 @@ def main():
 
     dataset = {
         "meta": {
-            "source": "主办方数据包（9 文件）",
+            "source": "真实数据包（9 文件）",
             "generatedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "rangeStart": str(start),
             "rangeEnd": str(end),
