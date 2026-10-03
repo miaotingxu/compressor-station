@@ -21,6 +21,7 @@ build/
 dist/
 out/
 target/
+*.tsbuildinfo
 node_modules/
 __pycache__/
 *.pyc

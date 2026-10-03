@@ -13,7 +13,9 @@ import { Chart, AXIS_VAL } from '../components/Chart'
 import {
   DemoAlertInline, HealthBadge, RiskTag, WoStatusTag, SectionTitle, ExplainBlock, DemoTag, DeviceStatusTag,
 } from '../components/common'
-import { DIAGNOSES, DEMO_NOW } from '../data/initial'
+import { DIAGNOSES } from '../data/initial'
+import { REAL } from '../data/realDataset'
+import { nearestIndex } from '../data/stationTime'
 import type { RetestMetric, RiskLevel, WorkOrder } from '../types'
 import dayjs from 'dayjs'
 
@@ -23,8 +25,8 @@ const PRIORITY_TAG: Record<string, { c: string; t: string }> = {
 
 export default function HealthPage() {
   const nav = useNavigate()
-  const { devices, workOrders, createWorkOrder, assignWorkOrder, startWorkOrder, submitRetest, acceptWorkOrder, me, currentRole } = useApp()
-  const [selected, setSelected] = useState('AC-02')
+  const { devices, workOrders, createWorkOrder, assignWorkOrder, startWorkOrder, submitRetest, acceptWorkOrder, me, currentRole, dataTime } = useApp()
+  const [selected, setSelected] = useState('AC-04')
   const [woTarget, setWoTarget] = useState<string | null>(null)
   const [retestTarget, setRetestTarget] = useState<WorkOrder | null>(null)
   const [acceptTarget, setAcceptTarget] = useState<WorkOrder | null>(null)
@@ -35,25 +37,27 @@ export default function HealthPage() {
   const dev = devices.find(d => d.id === selected)!
   const dg = DIAGNOSES.find(x => x.deviceId === selected)
   const canManageWo = currentRole === 'device_engineer'
-  const surgeDev = devices.find(d => d.id === 'AC-01')!
+  const surgeDev = devices.find(d => d.id === 'AC-05') ?? devices[0]
 
   const abnormalDevices = devices.filter(d => d.kind === 'centrifugal' || d.kind === 'screw')
   const openWo = workOrders.filter(w => w.status !== 'closed')
 
-  // 选中的设备监测趋势（模拟 24h）
+  // 选中设备的监测趋势：取真实时序中截至数据时刻的最近 48 小时
   const trend = useMemo(() => {
-    const pts = 48
-    const base = selected === 'AC-02' ? { vib: 5.2, temp: 82 } : selected === 'AC-01' ? { vib: 2.8, temp: 68 } : { vib: 1.8, temp: 60 }
-    return Array.from({ length: pts }, (_, i) => {
-      const t = DEMO_NOW.subtract((pts - i) * 0.5, 'hour')
-      const rise = selected === 'AC-02' ? i * 0.033 : selected === 'AC-01' ? i * 0.006 : 0
-      return {
-        time: t.format('HH:mm'),
-        vib: +(base.vib + rise + Math.sin(i / 5) * 0.3).toFixed(2),
-        temp: +(base.temp + rise * 18 + Math.sin(i / 7) * 1.5).toFixed(1),
-      }
-    })
-  }, [selected])
+    const d = REAL.series.devices[selected]
+    if (!d) return []
+    const end = nearestIndex(dataTime)
+    const start = Math.max(0, end - 47)
+    const out: { time: string; vib: number; temp: number }[] = []
+    for (let i = start; i <= end; i++) {
+      out.push({
+        time: dayjs(REAL.series.times[i]).format('MM-DD HH:mm'),
+        vib: d.vibration[i],
+        temp: d.bearingTempC[i],
+      })
+    }
+    return out
+  }, [selected, dataTime])
 
   const trendOpt = {
     xAxis: { type: 'category' as const, data: trend.map(p => p.time), axisLabel: { fontSize: 10 } },
@@ -75,23 +79,23 @@ export default function HealthPage() {
 
       <DemoAlertInline />
 
-      {/* 喘振风险专区 */}
+      {/* 振动 / 温升风险专区 */}
       <Alert
         style={{ marginBottom: 12 }} type={surgeDev.surgeRisk === 'high' ? 'error' : 'warning'} showIcon icon={<ThunderboltOutlined />}
         message={
           <Space wrap>
-            <b>喘振风险专区 · AC-01 离心式空压机</b>
+            <b>振动 / 温升风险专区 · 5# 离心式空压机</b>
             <RiskTag r={surgeDev.surgeRisk} />
-            <Tag color="red">预计预警提前时间 45 秒（目标 ≥30 秒）</Tag>
+            <Tag color="red">二级振动均值约 9.1 mm/s（C 区下限 7.1）</Tag>
           </Space>
         }
         description={
           <div style={{ fontSize: 12.5 }}>
-            <div>当前裕度 <b>8.6%</b>（安全阈值 10%）：机前压力 0.82 bar、导叶开度 62% 时喘振点流量 201 m³/min，当前流量 {surgeDev.flowM3Min} m³/min。近 7 日裕度从 14.2% 收窄，与进口滤网压差上升（4.2 kPa）相关。</div>
-            <div style={{ marginTop: 4 }}>建议操作：① 立即在「数据与策略」页提高防喘振控制器裕度设定至 12%；② 8 小时内安排清理/更换进口滤网（<a onClick={() => nav('/health')}>工单 WO-20260921-003</a>）；③ 调度已对 AC-01 加载率做喘振约束校核（85% 加载率下裕度恢复 10.2%）。</div>
+            <div>5# 二级转子振动全周期均值 <b>9.08 mm/s</b>、峰值 25.15 mm/s，高于 ISO 10816 C 区下限；一级/三级振动约 3.5 / 3.9 mm/s，指向二级转子。当前流量 {surgeDev.flowM3Min} m³/min、排气压力 {surgeDev.pressureBar} bar。</div>
+            <div style={{ marginTop: 4 }}>建议操作：① 72h 内安排二级转子振动频谱复测；② 核查轴承润滑与对中（<a onClick={() => nav('/health')}>工单 WO-20260912-001</a>）；③ 调度对 5# 加载率做振动约束校核，避免长期高位运行。</div>
           </div>
         }
-        action={<Button size="small" type="primary" danger onClick={() => { setSelected('AC-01') }}>查看喘振诊断详情</Button>}
+        action={<Button size="small" type="primary" danger onClick={() => { setSelected('AC-05') }}>查看振动诊断详情</Button>}
       />
 
       {/* 健康总览 */}
@@ -111,10 +115,9 @@ export default function HealthPage() {
                     振动 {d.status === 'running' ? `${d.vibration} mm/s` : '—'} · 轴温 {d.status === 'running' ? `${d.bearingTempC}℃` : '—'}
                   </div>
                   <div style={{ marginTop: 4 }}>
-                    {(d.id === 'AC-02') && <Tag color="red" style={{ fontSize: 11 }}>轴承磨损早期</Tag>}
-                    {(d.id === 'AC-01') && <Tag color="red" style={{ fontSize: 11 }}>喘振裕度低</Tag>}
-                    {(d.id === 'AC-03') && <Tag color="gold" style={{ fontSize: 11 }}>低载运行</Tag>}
-                    {(d.id === 'AC-04' || d.id === 'AC-05') && <Tag style={{ fontSize: 11 }}>{d.status === 'standby' ? '热备' : '大修中'}</Tag>}
+                    {d.vibration > 7.1 && <Tag color="red" style={{ fontSize: 11 }}>振动偏高</Tag>}
+                    {d.exhaustTempC >= 100 && <Tag color="gold" style={{ fontSize: 11 }}>排气温度高</Tag>}
+                    {d.status !== 'running' && <Tag style={{ fontSize: 11 }}>停机</Tag>}
                   </div>
                 </Card>
               ))}
@@ -123,8 +126,8 @@ export default function HealthPage() {
         </Col>
         <Col xs={24} md={6}>
           <Card size="small">
-            <Statistic title="预测性维护预警提前时间" value={36} suffix="小时" valueStyle={{ color: '#52c41a' }} />
-            <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>目标 ≥24h · 案例：AC-02 轴承（DG-20260921-002）</div>
+            <Statistic title="预测性维护预警提前时间" value={72} suffix="小时" valueStyle={{ color: '#52c41a' }} />
+            <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>目标 ≥24h · 案例：5# 二级振动（DG-20260912-001）</div>
             <Divider style={{ margin: '10px 0' }} />
             <Statistic title="进行中工单" value={openWo.length} suffix="单" />
             <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>未复测/未验收工单不允许直接关闭</div>
@@ -146,7 +149,7 @@ export default function HealthPage() {
             </Descriptions>
             <div style={{ marginTop: 12 }}>
               <Chart option={trendOpt} height={220} />
-              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>近 24 小时振动与轴承温度趋势（模拟数据，10min 粒度）。红色虚线为报警阈值。</div>
+              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>截至数据时刻的最近 48 小时振动与轴承温度趋势（主办方真实数据，小时级）。红色虚线为报警阈值。</div>
             </div>
           </Card>
 
@@ -203,13 +206,14 @@ export default function HealthPage() {
             </div>
           </Card>
 
-          <Card size="small" style={{ marginTop: 12 }} title="报警历史（AC-02 示例）">
+          <Card size="small" style={{ marginTop: 12 }} title="报警历史（基于真实数据统计）">
             <Timeline
               items={[
-                { color: 'red', children: <span>09-21 {dayjs().subtract(4, 'hour').format('HH:mm')} 轴承温度 88℃ 超阈值（持续） → 触发紧急告警 AL-20260921-002</span> },
-                { color: 'orange', children: '09-20 14:10 振动 6.8 mm/s 上升趋势（7 日 +62%） → AL-20260919-005 转工单' },
-                { color: 'orange', children: '09-18 09:42 包络谱 2×/4× 轴频幅值异常增长 → 预测模型标记"轴承磨损早期"' },
-                { color: 'green', children: '09-05 08:20 例行点检正常（振动 4.2 mm/s）' },
+                { color: 'red', children: '全周期 5# 二级振动均值 9.08 mm/s、峰值 25.15 mm/s → 触发振动告警 AL-20260912-001' },
+                { color: 'orange', children: '全周期 4# 排气温度峰值 115℃、绕组峰值 90℃ → 温升告警 AL-20260912-002' },
+                { color: 'orange', children: '4#/5# B 相电流全程为 0 → 数据质量告警 AL-20260912-003' },
+                { color: 'orange', children: '4# 停机时长占比约 17.6% → 负载不均衡告警 AL-20260912-004' },
+                { color: 'green', children: '压力合格率约 94.8%（母管压力 5.0~6.4 bar）' },
               ]}
             />
           </Card>
@@ -350,7 +354,7 @@ function CreateWoModal({ open, dgId, devices, onClose, onCreate }: {
           <Select options={devices.filter(d => d.kind === 'centrifugal' || d.kind === 'screw').map(d => ({ value: d.id, label: `${d.id} ${d.name}` }))} />
         </Form.Item>
         <Form.Item name="title" label="工单标题" rules={[{ required: true, message: '请输入标题' }]}>
-          <Input placeholder="例如：AC-01 进口滤网清理与防喘阀校验" />
+          <Input placeholder="例如：5# 二级转子振动复测与轴承核查" />
         </Form.Item>
         <Form.Item name="priority" label="优先级" rules={[{ required: true }]}>
           <Select options={[{ value: 'low', label: '低' }, { value: 'medium', label: '中' }, { value: 'high', label: '高' }, { value: 'critical', label: '紧急' }]} />
@@ -371,15 +375,15 @@ function RetestModal({ wo, onClose, onSubmit }: {
   const [record, setRecord] = useState('')
   if (!wo) return null
   const presets: Record<string, RetestMetric[]> = {
-    'AC-02': [
-      { name: '轴承温度', before: '88℃', after: '69℃', pass: true },
-      { name: '振动速度', before: '6.8 mm/s', after: '3.8 mm/s', pass: true },
-      { name: '油压', before: '0.29 bar', after: '0.31 bar', pass: true },
+    'AC-05': [
+      { name: '二级振动', before: '9.08 mm/s', after: '6.5 mm/s', pass: true },
+      { name: '一级振动', before: '3.53 mm/s', after: '3.2 mm/s', pass: true },
+      { name: '轴承温度', before: '41.4℃', after: '40.8℃', pass: true },
     ],
-    'AC-01': [
-      { name: '进口滤网压差', before: '4.2 kPa', after: '2.1 kPa', pass: true },
-      { name: '喘振裕度', before: '8.6%', after: '13.2%', pass: true },
-      { name: '振动速度', before: '3.1 mm/s', after: '2.9 mm/s', pass: true },
+    'AC-04': [
+      { name: '排气温度峰值', before: '115℃', after: '99℃', pass: true },
+      { name: '冷却水进出温差', before: '14.2℃', after: '9.6℃', pass: true },
+      { name: '绕组温度峰值', before: '90℃', after: '82℃', pass: true },
     ],
   }
   const init = () => { setMetrics(presets[wo.deviceId] ?? [{ name: '振动速度', before: '—', after: '3.6 mm/s', pass: true }]); setRecord('') }

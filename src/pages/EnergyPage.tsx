@@ -37,7 +37,7 @@ export default function EnergyPage() {
 
   const seChart = {
     xAxis: { type: 'category' as const, data: data.map(d => d.date.slice(5)), ...AXIS_TIME },
-    yAxis: { type: 'value' as const, name: 'kWh/m³', min: 0.098, max: 0.118, ...AXIS_VAL },
+    yAxis: { type: 'value' as const, name: 'kWh/m³', min: 0.06, max: 0.12, ...AXIS_VAL },
     legend: LEGEND,
     series: [
       {
@@ -64,7 +64,7 @@ export default function EnergyPage() {
 
   const qualifyChart = {
     xAxis: { type: 'category' as const, data: data.map(d => d.date.slice(5)), ...AXIS_TIME },
-    yAxis: { type: 'value' as const, name: '%', min: 97, max: 100, ...AXIS_VAL },
+    yAxis: { type: 'value' as const, name: '%', min: 85, max: 100, ...AXIS_VAL },
     legend: LEGEND,
     series: [
       { name: '压力合格率', type: 'bar' as const, data: data.map(d => d.pressureQualifyPct), itemStyle: { color: '#1d4ed8', borderRadius: [3, 3, 0, 0] }, markLine: { silent: true, symbol: 'none', lineStyle: { color: '#ff4d4f', type: 'dashed' }, label: { formatter: '目标 99.5%', fontSize: 10 }, data: [{ yAxis: 99.5 }] } },
@@ -88,12 +88,12 @@ export default function EnergyPage() {
     setDetail({
       title: '节能收益明细与计算依据',
       rows: [
-        ['数据范围', `${range === 'day' ? '今日' : range === 'week' ? '近 7 天' : '近 30 天'}（AI 调度期：${AI_START.format('MM-DD')} 起）`],
-        ['对比基线', `同工况人工基线模型：比功率 ${baseSE || BASELINE_METRICS.specificEnergy} kWh/m³（取自基线期实测拟合）`],
-        ['计算式', `节电量 = (基线比功率 − AI 期比功率) × AI 期累计产气量；节电额 = 节电量 × 电价 0.8 元/kWh`],
-        ['关联调度方案', 'PLAN-20260919-001（已执行复盘，节电 1286 kWh）；PLAN-20260920-002（夜间轮换，执行异常待处置）'],
-        ['是否为模拟回放结果', '是 —— 本演示环境全部数据为本地模拟，收益为模拟回放推演值，不代表真实生产结果'],
-        ['可信度说明', '模拟电表与流量计数据完整率 99.2%；基线采用同负荷段拟合（非简单历史同比），已剔除产线扩产影响；可信度：中高'],
+        ['数据范围', `真实数据全周期（分界日 ${AI_START.format('YYYY-MM-DD')}，之前为基线期，之后为近期期）`],
+        ['对比基线', `基线期实测系统比功率 ${baseSE || BASELINE_METRICS.specificEnergy} kWh/m³（真实数据计算）`],
+        ['计算式', `比功率变化 = (近期比功率 − 基线比功率) / 基线比功率；节电量按两期累计产气量折算，电价 0.8 元/kWh`],
+        ['关联调度方案', 'PLAN-20260910-001（已执行复盘）；PLAN-20260911-002（执行异常待处置）'],
+        ['口径说明', '主办方提供的是连续运行的历史归档，不含 AI 调度干预前后对照，因此此处为真实数据两期对比，不能等同于 AI 节能收益'],
+        ['可信度说明', '数据源为真实数据包；B 相电流等字段存在缺失，已在使用中剔除，其余点位参与统计'],
       ],
     })
   }
@@ -101,7 +101,7 @@ export default function EnergyPage() {
   return (
     <div className="page-container">
       <h1 className="page-title">能效与收益<DemoTag /></h1>
-      <div className="page-subtitle">每一项收益均可追溯：数据范围、对比基线、关联方案与可信度说明。区分「赛题目标值 / 当前模拟值 / 历史基线 / 模拟回放结果」。</div>
+      <div className="page-subtitle">基于主办方真实数据（2026-03-12 ~ 2026-09-12）。区分「赛题目标值 / 真实计算值 / 基线期」，每一项均可追溯。</div>
 
       <DemoAlertInline />
 
@@ -119,7 +119,7 @@ export default function EnergyPage() {
       )}
 
       <Row gutter={12}>
-        <Col xs={12} md={4}><Card size="small"><Statistic title="系统综合能效提升" value={improve || 6.3} precision={1} suffix="%" valueStyle={{ color: '#52c41a' }} prefix={<ArrowUpOutlined />} /><div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>目标 ≥6% · {range === 'month' ? '30 天' : range === 'week' ? '7 天' : '今日'}口径</div></Card></Col>
+        <Col xs={12} md={4}><Card size="small"><Statistic title="系统比功率变化（近期 vs 基线）" value={improve} precision={1} suffix="%" valueStyle={{ color: improve <= 0 ? '#52c41a' : '#ff4d4f' }} prefix={improve <= 0 ? <ArrowDownOutlined /> : <ArrowUpOutlined />} /><div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{range === 'month' ? '全周期' : range === 'week' ? '7 天' : '今日'}口径（真实数据）</div></Card></Col>
         <Col xs={12} md={4}><Card size="small"><Statistic title="单位产气能耗（AI 期）" value={aiSE || BASELINE_METRICS.specificEnergy} precision={4} suffix="kWh/m³" /><div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>基线 {baseSE || BASELINE_METRICS.specificEnergy}</div></Card></Col>
         <Col xs={12} md={4}><Card size="small"><Statistic title="供气压力合格率" value={AI_METRICS.pressureQualifyPct} precision={2} suffix="%" /><div style={{ fontSize: 12, color: AI_METRICS.pressureQualifyPct >= 99.5 ? '#52c41a' : '#ff4d4f' }}>目标 ≥99.5% · 基线 {BASELINE_METRICS.pressureQualifyPct}%</div></Card></Col>
         <Col xs={12} md={4}><Card size="small"><Statistic title="加载率偏离度" value={AI_METRICS.loadDeviationPct} precision={1} suffix="%" prefix="±" /><div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>目标 ≤±10% · 基线 ±{BASELINE_METRICS.loadDeviationPct}%</div></Card></Col>
@@ -152,32 +152,33 @@ export default function EnergyPage() {
         <Alert
           style={{ marginTop: 12 }} type="info" showIcon
           message="本月节能收益偏差 -0.8pp（月累计 5.5% vs 目标 6%）"
-          description="主要受 09-15 基线偏移与 09-18 方案执行异常（AC-04 空载 2.1h）影响。查看上方收益计算依据后，可确认关闭该待办。"
+          description="真实数据前后半程对比显示近期比功率高于基线期，主要受季节温升与冷却负荷上升影响。查看上方计算依据后可确认关闭该待办。"
           action={<Button size="small" onClick={() => { resolveTodo('TD-010', '已查看收益明细与偏差归因，确认知悉'); message.success('待办已确认关闭') }}>确认知悉并关闭</Button>}
         />
       )}
 
       {/* 赛题指标 */}
-      <SectionTitle extra={<span style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>目标值来自赛题要求；当前值为模拟回放/推演结果，已逐项标注数据来源</span>}>主办方指标达成（目标值 vs 当前模拟值 vs 历史基线）</SectionTitle>
+      <SectionTitle extra={<span style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>可持续计算的指标取自真实数据；其余保留赛题目标口径</span>}>主办方指标达成（赛题目标 vs 当前值 vs 基线）</SectionTitle>
       <Card size="small">
         <Table
           size="small" rowKey="key" pagination={false}
           dataSource={defs}
           columns={[
-            { title: '指标', dataIndex: 'name', width: 220, render: (v, r) => <Space size={4}>{v}{r.bonus && <Tag color="purple">加分</Tag>}</Space> },
-            { title: '赛题目标', dataIndex: 'target', width: 110 },
-            { title: '当前模拟值', dataIndex: 'currentText', width: 170, render: (v, r) => (
+            { title: '指标', dataIndex: 'name', width: 210, render: (v, r) => <Space size={4}>{v}{r.bonus && <Tag color="purple">加分</Tag>}</Space> },
+            { title: '数据依据', dataIndex: 'dataBasis', width: 100, render: (v: string) => v === 'real' ? <Tag color="green">真实数据</Tag> : <Tag color="orange">赛题目标</Tag> },
+            { title: '赛题目标', dataIndex: 'target', width: 100 },
+            { title: '当前值', dataIndex: 'currentText', width: 160, render: (v, r) => (
               <Space size={4}>
                 <span style={{ fontWeight: 600 }}>{v}</span>
-                {r.reached ? <Tag color="green" icon={<CheckCircleOutlined />} style={{ fontSize: 11 }}>达标</Tag> : <Tag color="red" icon={<CloseCircleOutlined />} style={{ fontSize: 11 }}>未达标</Tag>}
+                {r.dataBasis === 'real' && (r.reached ? <Tag color="green" icon={<CheckCircleOutlined />} style={{ fontSize: 11 }}>达标</Tag> : <Tag color="red" icon={<CloseCircleOutlined />} style={{ fontSize: 11 }}>未达标</Tag>)}
               </Space>
             ) },
             { title: '历史基线', dataIndex: 'baselineText', render: v => <span style={{ fontSize: 12, color: 'rgba(0,0,0,0.6)' }}>{v}</span> },
-            { title: '数据时段', dataIndex: 'dataRange', width: 190, render: v => <span style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)' }}>{v}</span> },
-            { title: '追溯', dataIndex: 'source', render: v => <Tooltip title={v}><span style={{ fontSize: 12, color: '#1d4ed8' }}>{v.length > 26 ? v.slice(0, 26) + '…' : v}</span></Tooltip> },
+            { title: '数据时段', dataIndex: 'dataRange', width: 180, render: v => <span style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)' }}>{v}</span> },
+            { title: '追溯', dataIndex: 'source', render: v => <Tooltip title={v}><span style={{ fontSize: 12, color: '#1d4ed8' }}>{v.length > 24 ? v.slice(0, 24) + '…' : v}</span></Tooltip> },
           ]}
         />
-        <Alert style={{ marginTop: 10 }} type="info" showIcon message="口径说明" description={<span style={{ fontSize: 12.5 }}>以上"当前模拟值"由<b>本地模拟数据与模拟回放</b>计算得出，用于演示指标口径与追溯链路；目标值为赛题要求，页面明确区分两者，模拟值不得视为真实生产结果。</span>} />
+        <Alert style={{ marginTop: 10 }} type="info" showIcon message="口径说明" description={<span style={{ fontSize: 12.5 }}>标注「真实数据」的指标由主办方真实数据计算；标注「赛题目标」的指标在提供的数据包中没有对应测点，仅保留目标口径展示。</span>} />
       </Card>
 
       {/* 收益明细弹窗 */}
@@ -193,7 +194,7 @@ export default function EnergyPage() {
           <Button key="e" type="primary" icon={<DownloadOutlined />} onClick={() => message.success('月度能效报告已导出（演示环境模拟导出）')}>导出报告</Button>,
         ]}
       >
-        <Alert style={{ marginBottom: 10 }} type="warning" showIcon icon={<ExperimentOutlined />} message={<>本报告基于<b>模拟回放数据</b>生成 · 数据范围：{MONTHLY_REPORT.dataRange}</>} />
+        <Alert style={{ marginBottom: 10 }} type="info" showIcon icon={<ExperimentOutlined />} message={<>本报告基于<b>主办方真实数据</b>生成 · 数据范围：{MONTHLY_REPORT.dataRange}</>} />
         <Table
           size="small" rowKey="name" pagination={false}
           dataSource={MONTHLY_REPORT.metrics}

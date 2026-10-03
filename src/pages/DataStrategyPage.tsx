@@ -11,7 +11,8 @@ import { useNavigate } from 'react-router-dom'
 import { useApp, useDataQualityBlock } from '../store/appStore'
 import { Chart, AXIS_VAL } from '../components/Chart'
 import { DemoAlertInline, StrategyStatusTag, SectionTitle, DemoTag } from '../components/common'
-import { DEVICE_MAP } from '../data/initial'
+import { COMPRESSORS, DEVICE_MAP } from '../data/initial'
+import { REAL } from '../data/realDataset'
 import type { StrategyVersion } from '../types'
 import dayjs from 'dayjs'
 
@@ -36,7 +37,7 @@ export default function DataStrategyPage() {
   const [rejectTarget, setRejectTarget] = useState<StrategyVersion | null>(null)
   const [rejectNote, setRejectNote] = useState('')
   const [rollbackTarget, setRollbackTarget] = useState<StrategyVersion | null>(null)
-  const [curveDev, setCurveDev] = useState<string | null>(null)
+  const [curveDev, setCurveDev] = useState<string | null>(COMPRESSORS[0]?.id ?? null)
   const [thresholdForm] = Form.useForm()
 
   const canManageStrategy = currentRole === 'admin'
@@ -57,8 +58,8 @@ export default function DataStrategyPage() {
       <DemoAlertInline />
 
       <Row gutter={12}>
-        <Col xs={24} md={7}><Card size="small"><Statistic title="数据源在线" value={`${dataSources.filter(s => s.status === 'online').length}/${dataSources.length}`} prefix={<ApiOutlined />} /><div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>DS-PLC-04 降级（AC-04 网关固件老旧）</div></Card></Col>
-        <Col xs={24} md={7}><Card size="small"><Statistic title="数据完整率" value="99.2" suffix="%" /><div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>近 24h 全点位统计</div></Card></Col>
+        <Col xs={24} md={7}><Card size="small"><Statistic title="数据源在线" value={`${dataSources.filter(s => s.status === 'online').length}/${dataSources.length}`} prefix={<ApiOutlined />} /><div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>降级 {dataSources.filter(s => s.status === 'degraded').length} 个（含字段质量问题）</div></Card></Col>
+        <Col xs={24} md={7}><Card size="small"><Statistic title="数据完整率" value={(REAL.points.reduce((s, p) => s + p.coveragePct, 0) / REAL.points.length).toFixed(1)} suffix="%" /><div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>87 个测点全周期平均覆盖率</div></Card></Col>
         <Col xs={24} md={10}>
           <Card size="small" title="模拟数据异常（演示安全门禁）" extra={<Switch checked={simulateDataOutage} onChange={toggleDataOutage} checkedChildren="开启" unCheckedChildren="关闭" />}>
             <div style={{ fontSize: 12.5, color: 'rgba(0,0,0,0.6)' }}>
@@ -127,8 +128,8 @@ export default function DataStrategyPage() {
           <SectionTitle>设备性能曲线</SectionTitle>
           <Card size="small">
             <Space wrap style={{ marginBottom: 8 }}>
-              {['AC-01', 'AC-02', 'AC-03', 'AC-04', 'AC-05'].map(id => (
-                <Button key={id} size="small" type={curveDev === id ? 'primary' : 'default'} onClick={() => setCurveDev(id)}>{id}</Button>
+              {COMPRESSORS.map(d => (
+                <Button key={d.id} size="small" type={curveDev === d.id ? 'primary' : 'default'} onClick={() => setCurveDev(d.id)}>{d.id}</Button>
               ))}
             </Space>
             {dev && dev.curve.length > 0 ? (
@@ -141,7 +142,7 @@ export default function DataStrategyPage() {
                   series: [{ type: 'line' as const, smooth: true, data: dev.curve.map(c => [c.loadRate, c.specificPower]), lineStyle: { color: '#1d4ed8', width: 2 }, itemStyle: { color: '#1d4ed8' }, areaStyle: { opacity: 0.08 } }],
                 }} />
                 <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)' }}>
-                  {dev.id} {dev.model} 性能曲线（出厂性能试验 + 运行数据辨识拟合，演示数据）。可编辑曲线点后提交重新辨识（模拟）。
+                  {dev.id} {dev.model} 性能曲线（出厂额定比功率 {REAL.devices.find(d => d.id === dev.id)?.ratedSpecificPower ?? 4.65} kW/(m³/min) 拟合，真实档案）。可编辑曲线点后提交重新辨识（模拟）。
                   <Button size="small" type="link" style={{ padding: 0, marginLeft: 6 }} onClick={() => message.success('已提交曲线重新辨识任务（演示环境模拟）')}>提交重新辨识</Button>
                 </div>
               </>
@@ -154,7 +155,7 @@ export default function DataStrategyPage() {
           <SectionTitle>阈值与喘振边界配置</SectionTitle>
           <Card size="small">
             <Form form={thresholdForm} layout="vertical" size="small" initialValues={{
-              pressureLow: 0.78, pressureHigh: 0.84, surgeMargin: 10, bearingTemp: 85, vibration: 7.1, lowLoadThreshold: 50,
+              pressureLow: 5.0, pressureHigh: 6.4, surgeMargin: 10, bearingTemp: 85, vibration: 7.1, lowLoadThreshold: 50,
             }}>
               <Row gutter={12}>
                 <Col span={8}><Form.Item label="母管压力合格带下沿 (bar)" name="pressureLow"><InputNumber style={{ width: '100%' }} step={0.01} /></Form.Item></Col>
@@ -183,7 +184,7 @@ export default function DataStrategyPage() {
           size="small" rowKey="id" pagination={false}
           dataSource={strategies}
           expandable={{
-            defaultExpandedRowKeys: ['STG-V1.3.0-C'],
+            defaultExpandedRowKeys: ['STG-V1.2.0-C'],
             expandedRowRender: (s: StrategyVersion) => (
               <div style={{ padding: 4 }}>
                 <Descriptions size="small" column={2} bordered style={{ marginBottom: 8 }}>

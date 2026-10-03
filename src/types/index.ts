@@ -36,6 +36,16 @@ export interface Device {
   windingTempC: number
   currentA: number
   oilPressureBar: number
+  /** 排气温度 ℃ */
+  exhaustTempC: number
+  /** 进气导叶开度 % */
+  igvPct: number
+  /** 放空阀闭度 % */
+  bovPct: number
+  /** 健康判定依据（真实算法输出） */
+  healthFindings?: { metric: string; value: string; level: 'info' | 'warning' | 'critical'; detail: string }[]
+  /** 控制网关可靠性：false 时下发回执可能超时（用于异常闭环演示） */
+  gatewayReliable?: boolean
   note?: string
 }
 

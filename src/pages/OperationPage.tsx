@@ -1,20 +1,22 @@
 import { useMemo, useState } from 'react'
-import { Card, Row, Col, Table, Tag, Button, Modal, Input, Select, Space, Statistic, Drawer, Descriptions, Timeline, message, Segmented, Tooltip } from 'antd'
-import { WarningOutlined, ThunderboltOutlined, AimOutlined, FileTextOutlined, CheckCircleOutlined } from '@ant-design/icons'
+import { Card, Row, Col, Table, Tag, Button, Modal, Input, Select, Space, Statistic, Drawer, Descriptions, Timeline, message, Segmented, Tooltip, DatePicker } from 'antd'
+import { WarningOutlined, ThunderboltOutlined, AimOutlined, FileTextOutlined, CheckCircleOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../store/appStore'
 import { Chart, AXIS_TIME, AXIS_VAL, LEGEND } from '../components/Chart'
 import {
   DemoAlertInline, DeviceStatusTag, AlertLevelTag, AlertStatusTag, RiskTag, HealthBadge, SectionTitle, DemoTag,
 } from '../components/common'
-import { REALTIME_TREND, LOAD_FORECAST, HISTORY_30D } from '../data/timeseries'
+import { LOAD_FORECAST } from '../data/timeseries'
 import { DIAGNOSES } from '../data/initial'
+import { windowEndingAt, isAtLatest } from '../data/stationTime'
+import { STATION, LOAD } from '../data/stationConfig'
 import type { Alert, Device, RiskLevel } from '../types'
 import dayjs from 'dayjs'
 
 export default function OperationPage() {
   const nav = useNavigate()
-  const { devices, alerts, confirmAlert, alertToScheduling, alertToWorkorder, closeAlert, createWorkOrder, currentRole, me } = useApp()
+  const { devices, alerts, confirmAlert, alertToScheduling, alertToWorkorder, closeAlert, createWorkOrder, currentRole, me, dataTime, setDataTime, replayPlaying, toggleReplay } = useApp()
   const [detail, setDetail] = useState<Device | null>(null)
   const [closeTarget, setCloseTarget] = useState<Alert | null>(null)
   const [closeConclusion, setCloseConclusion] = useState('')
@@ -25,22 +27,24 @@ export default function OperationPage() {
   const running = compressors.filter(d => d.status === 'running')
 
   const trendData = useMemo(() => {
-    if (range === '6h') return REALTIME_TREND.map(p => ({ time: p.time, pressureBar: p.pressureBar, totalFlow: p.totalFlow, totalPowerKw: p.totalPowerKw, avgLoadRate: p.avgLoadRate }))
-    const src = range === '24h' ? HISTORY_30D.slice(-24) : HISTORY_30D.slice(-24 * 7).filter((_, i) => i % 6 === 0)
-    return src.map(p => ({
-      time: range === '24h' ? p.time.slice(11, 16) : p.time.slice(5, 16),
-      pressureBar: p.headerPressureBar,
-      totalFlow: p.demandM3Min,
-      totalPowerKw: p.totalPowerKw,
-      avgLoadRate: Math.round(30 + (p.demandM3Min / 385) * 48),
-    }))
-  }, [range])
+    const hours = range === '6h' ? 6 : range === '24h' ? 24 : 24 * 7
+    const step = range === '7d' ? 6 : 1
+    return windowEndingAt(dataTime, hours)
+      .filter((_, i) => i % step === 0)
+      .map(p => ({
+        time: range === '6h' || range === '24h' ? dayjs(p.time).format('HH:mm') : dayjs(p.time).format('MM-DD HH:mm'),
+        pressureBar: p.headerPressureBar,
+        totalFlow: p.totalFlow,
+        totalPowerKw: p.totalPowerKw,
+        avgLoadRate: Math.round(p.avgLoadRate),
+      }))
+  }, [range, dataTime])
 
   const canHandle = currentRole === 'operator' || currentRole === 'device_engineer'
 
   const pressureOpt = {
     xAxis: { type: 'category' as const, data: trendData.map(p => p.time), ...AXIS_TIME },
-    yAxis: { type: 'value' as const, min: 0.72, max: 0.88, ...AXIS_VAL, name: 'bar' },
+    yAxis: { type: 'value' as const, min: 4.5, max: 6.8, ...AXIS_VAL, name: 'bar' },
     legend: LEGEND,
     series: [
       {
@@ -48,13 +52,13 @@ export default function OperationPage() {
         showSymbol: false, lineStyle: { width: 2, color: '#1d4ed8' }, itemStyle: { color: '#1d4ed8' },
         markArea: {
           itemStyle: { color: 'rgba(82,196,26,0.08)' },
-          data: [[{ yAxis: 0.78 }, { yAxis: 0.84 }]],
+          data: [[{ yAxis: 5.0 }, { yAxis: 6.4 }]],
         },
         markLine: {
           silent: true, symbol: 'none',
           lineStyle: { color: '#52c41a', type: 'dashed' },
-          label: { formatter: '合格带 0.78~0.84', fontSize: 10 },
-          data: [{ yAxis: 0.78 }, { yAxis: 0.84 }],
+          label: { formatter: '合格带 5.0~6.4', fontSize: 10 },
+          data: [{ yAxis: 5.0 }, { yAxis: 6.4 }],
         },
       },
     ],
@@ -79,7 +83,7 @@ export default function OperationPage() {
     legend: LEGEND,
     series: [
       { name: '平均加载率', type: 'line' as const, data: trendData.map(p => p.avgLoadRate), smooth: true, showSymbol: false, areaStyle: { opacity: 0.12 }, itemStyle: { color: '#13c2c2' } },
-      { name: '经济区间下限(55%)', type: 'line' as const, data: trendData.map(() => 55), symbol: 'none', lineStyle: { type: 'dashed', color: '#faad14' }, itemStyle: { color: '#faad14' } },
+      { name: `经济区间下限(${LOAD.economicLowPct}%)`, type: 'line' as const, data: trendData.map(() => LOAD.economicLowPct), symbol: 'none', lineStyle: { type: 'dashed', color: '#faad14' }, itemStyle: { color: '#faad14' } },
     ],
   }
 
@@ -113,16 +117,16 @@ export default function OperationPage() {
 
   return (
     <div className="page-container">
-      <h1 className="page-title">运行管理 · {`海川精工 · 1 号空压站`}<DemoTag text="实时数据为模拟刷新" /></h1>
-      <div className="page-subtitle">站点总览、机组状态、趋势与告警处置。数据每 12 秒模拟刷新一次。</div>
+      <h1 className="page-title">运行管理 · {`${STATION.factory} · ${STATION.name}`}<DemoTag text="真实历史数据 · 支持时间轴回放" /></h1>
+      <div className="page-subtitle">站点总览、机组状态、趋势与告警处置。时间轴默认定位到数据末端（{STATION.rangeEnd.slice(0, 10)}），可拖动日期或播放历史回放，全站遥测随数据时刻同步。</div>
 
       <DemoAlertInline />
 
       <Row gutter={12}>
-        <Col xs={12} md={4}><Card size="small"><Statistic title="母管压力" value={trendData[trendData.length - 1]?.pressureBar ?? 0.81} precision={2} suffix="bar" /><div style={{ fontSize: 12, color: '#52c41a' }}>合格带 0.78~0.84</div></Card></Col>
+        <Col xs={12} md={4}><Card size="small"><Statistic title="母管压力" value={trendData[trendData.length - 1]?.pressureBar ?? 5.6} precision={2} suffix="bar" /><div style={{ fontSize: 12, color: '#52c41a' }}>合格带 5.0~6.4</div></Card></Col>
         <Col xs={12} md={4}><Card size="small"><Statistic title="总流量" value={totalFlow} suffix="m³/min" /></Card></Col>
         <Col xs={12} md={4}><Card size="small"><Statistic title="总功率" value={totalPower} suffix="kW" /></Card></Col>
-        <Col xs={12} md={4}><Card size="small"><Statistic title="平均加载率" value={avgLoad} suffix="%" /><div style={{ fontSize: 12, color: avgLoad < 55 ? '#fa8c16' : 'rgba(0,0,0,0.45)' }}>{avgLoad < 55 ? '低于经济区间下限 55%' : '处于经济区间'}</div></Card></Col>
+        <Col xs={12} md={4}><Card size="small"><Statistic title="平均加载率" value={avgLoad} suffix="%" /><div style={{ fontSize: 12, color: avgLoad < LOAD.economicLowPct ? '#fa8c16' : 'rgba(0,0,0,0.45)' }}>          {avgLoad < LOAD.economicLowPct ? `低于经济区间下限 ${LOAD.economicLowPct}%` : '处于经济区间'}</div></Card></Col>
         <Col xs={12} md={4}><Card size="small"><Statistic title="在线机组" value={`${running.length}/${compressors.length}`} suffix="台" /></Card></Col>
         <Col xs={12} md={4}><Card size="small"><Statistic title="未确认告警" value={alerts.filter(a => a.status === 'unconfirmed').length} suffix="条" valueStyle={{ color: alerts.some(a => a.status === 'unconfirmed' && a.level === 'critical') ? '#ff4d4f' : undefined }} /></Card></Col>
       </Row>
@@ -149,9 +153,9 @@ export default function OperationPage() {
             { title: '喘振风险', dataIndex: 'surgeRisk', width: 100, render: (r: Device['surgeRisk']) => r === 'none' ? <Tag>不适用</Tag> : <RiskTag r={r} /> },
             { title: '异常', render: (_, r) => {
               const tags = []
-              if (r.id === 'AC-03' && r.status === 'running') tags.push(<Tag key="1" color="gold">低加载率</Tag>)
-              if (r.id === 'AC-02') tags.push(<Tag key="2" color="red">轴承高温</Tag>)
-              if (r.id === 'AC-01' && r.surgeRisk === 'medium') tags.push(<Tag key="3" color="red">喘振裕度低</Tag>)
+              if (r.vibration > 7.1) tags.push(<Tag key="1" color="red">振动偏高</Tag>)
+              if (r.exhaustTempC >= 100) tags.push(<Tag key="2" color="gold">排气温度高</Tag>)
+              if (r.status !== 'running') tags.push(<Tag key="3" color="gold">停机</Tag>)
               return tags.length ? <Space size={2}>{tags}</Space> : <Tag>正常</Tag>
             } },
           ]}
@@ -169,31 +173,43 @@ export default function OperationPage() {
       </Card>
 
       {/* 趋势图 */}
-      <SectionTitle extra={<Segmented size="small" value={range} onChange={v => setRange(v as typeof range)} options={['6h', '24h', '7d']} />}>运行趋势</SectionTitle>
+      <SectionTitle extra={
+        <Space size={8} wrap>
+          <DatePicker
+            size="small" showTime={{ format: 'HH' }} format="YYYY-MM-DD HH:00" allowClear={false}
+            value={dayjs(dataTime)}
+            disabledDate={d => d.isBefore(dayjs(STATION.rangeStart).startOf('day')) || d.isAfter(dayjs(STATION.rangeEnd).endOf('day'))}
+            onChange={d => d && setDataTime(d.format('YYYY-MM-DD HH:00:00'))}
+          />
+          <Button size="small" icon={replayPlaying ? <PauseCircleOutlined /> : <PlayCircleOutlined />} onClick={toggleReplay}>{replayPlaying ? '暂停回放' : '历史回放'}</Button>
+          <Tag color={isAtLatest(dataTime) ? 'green' : 'blue'}>{isAtLatest(dataTime) ? '最新时段' : '历史回放中'}</Tag>
+          <Segmented size="small" value={range} onChange={v => setRange(v as typeof range)} options={['6h', '24h', '7d']} />
+        </Space>
+      }>运行趋势 · 时间轴 {dayjs(dataTime).format('MM-DD HH:00')}</SectionTitle>
       <Row gutter={12}>
-        <Col xs={24} lg={8}><Card size="small" title="母管压力趋势（近 6 小时实时）"><Chart option={pressureOpt} height={240} /></Card></Col>
+        <Col xs={24} lg={8}><Card size="small" title="母管压力趋势"><Chart option={pressureOpt} height={240} /></Card></Col>
         <Col xs={24} lg={8}><Card size="small" title="总流量 / 总功率趋势"><Chart option={flowPowerOpt} height={240} /></Card></Col>
         <Col xs={24} lg={8}><Card size="small" title="平均加载率趋势"><Chart option={loadOpt} height={240} /></Card></Col>
       </Row>
 
       <Row gutter={12} style={{ marginTop: 12 }}>
         <Col xs={24} lg={14}>
-          <Card size="small" title="未来 4 小时负荷预测（模拟预测，早高峰场景）">
+          <Card size="small" title="未来 4 小时负荷预测（基于真实末尾一日同时段形态）">
             <Chart option={forecastOpt} height={240} />
             <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)' }}>
-              依据：近 30 天同时段负荷特征 + 三车间排产计划（MES）。置信区间 ±5%，峰值出现在 {LOAD_FORECAST.reduce((a, b) => (b.forecastM3Min > a.forecastM3Min ? b : a)).time}。
+              依据：真实数据末尾一日的分时负荷形态外推。置信区间 ±5%，峰值出现在 {LOAD_FORECAST.reduce((a, b) => (b.forecastM3Min > a.forecastM3Min ? b : a)).time}。
             </div>
           </Card>
         </Col>
         <Col xs={24} lg={10}>
-          <Card size="small" title="事件时间线（近 24 小时）">
+          <Card size="small" title="事件时间线（基于真实数据）">
             <Timeline
               items={[
-                { color: 'red', children: <span><b>AC-01 喘振裕度收窄至 8.6%</b>（2 小时前） · 建议清理进口滤网 <Button type="link" size="small" onClick={() => nav('/health')}>查看诊断</Button></span> },
-                { color: 'red', children: <span><b>AC-02 轴承温度 88℃ 超阈值</b>（4 小时前） · 关联工单 WO-20260920-002 <Button type="link" size="small" onClick={() => nav('/health')}>查看工单</Button></span> },
-                { color: 'orange', children: <span><b>AC-03 低加载率异常确认推动调度优化</b>（6 小时前）</span> },
-                { color: 'blue', children: <span><b>方案 PLAN-20260920-002 执行状态未知</b>（29 小时前） · AC-04 回执超时 <Button type="link" size="small" onClick={() => nav('/execution')}>去处置</Button></span> },
-                { color: 'green', children: <span><b>方案 PLAN-20260919-001 执行完成，复盘节能 5.6%</b>（54 小时前）</span> },
+                { color: 'red', children: <span><b>5# 二级振动均值约 9.1 mm/s</b>（超 C 区下限） · 建议频谱复测 <Button type="link" size="small" onClick={() => nav('/health')}>查看诊断</Button></span> },
+                { color: 'red', children: <span><b>4# 排气温度峰值 115℃</b> · 关联工单 WO-20260911-002 <Button type="link" size="small" onClick={() => nav('/health')}>查看工单</Button></span> },
+                { color: 'orange', children: <span><b>4#/5# B 相电流全程为 0</b> · 三相监测不完整</span> },
+                { color: 'blue', children: <span><b>方案 PLAN-20260911-002 执行状态未知</b> · 4# 回执超时 <Button type="link" size="small" onClick={() => nav('/execution')}>去处置</Button></span> },
+                { color: 'green', children: <span><b>方案 PLAN-20260910-001 执行完成，复盘节能 2.4%</b></span> },
               ]}
             />
           </Card>
@@ -302,14 +318,14 @@ function DeviceDetail({ d, onNav }: { d: Device; onNav: (p: string) => void }) {
 
       {(d.kind === 'centrifugal' || d.kind === 'screw') && (
         <>
-          <SectionTitle>实时监测量（模拟）</SectionTitle>
+          <SectionTitle>监测量（真实数据统计均值）</SectionTitle>
           <Row gutter={[8, 8]}>
             {[
               { k: '振动速度', v: `${d.vibration} mm/s`, warn: d.vibration > 4.5 },
               { k: '轴承温度', v: `${d.bearingTempC} ℃`, warn: d.bearingTempC > 85 },
               { k: '绕组温度', v: `${d.windingTempC} ℃`, warn: d.windingTempC > 95 },
               { k: '电流', v: `${d.currentA} A`, warn: false },
-              { k: '油压', v: `${d.oilPressureBar} bar`, warn: d.oilPressureBar > 0 && d.oilPressureBar < 0.2 },
+              { k: '油压', v: `${d.oilPressureBar} bar`, warn: d.oilPressureBar > 0 && d.oilPressureBar < 1.5 },
             ].map(m => (
               <Col span={8} key={m.k}>
                 <Card size="small" style={{ textAlign: 'center', borderColor: m.warn ? '#ffa39e' : undefined }}>

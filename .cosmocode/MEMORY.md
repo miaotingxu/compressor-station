@@ -32,3 +32,18 @@ Agent 在任务执行过程中发现的条目遵循以下格式：
   - dev 模式：npm run dev（同端口；生产演示优先用 preview 以规避 dev 热重载内存峰值）
   - 核心业务数字必须与设备性能模型自洽：比功率单位为 kW/(m³/min)（离心机最优 75%~85%，螺杆机 60%~75%），系统比功率 kWh/m³（基线约 0.1127，AI 期约 0.1050）；修改 initial.ts/timeseries.ts 后用 tsx 跑冒烟脚本验证（峰值产能覆盖、压力合格率、能耗推演）
   - 业务状态核销依赖 TodoItem.refId 关联实体（告警/方案批次/工单/策略/数据质量），新增业务动作需同步核销对应待办
+
+[主办方真实数据接入管线]
+- Date: 2026-10-03
+- Context: Agent 在把主办方 9 个真实数据文件接入空压站程序时发现
+- Category: 构建方法
+- Instructions:
+  - 预处理命令：`python3 scripts/build_real_dataset.py`（依赖 pandas + openpyxl，需 pip3 install --break-system-packages pandas openpyxl）
+  - 脚本输出两份：`src/data/generated/realDataset.json`（构建期内置）与 `public/data/realDataset.json`（运行时加载，替换数据包无需重新构建）
+  - 4 个主办方 xlsx 使用 Windows 反斜杠内部路径（如 `xl\workbook.xml`），标准解析器报错，脚本按正斜杠重打包后再读取
+  - 压力源单位是 MPa，程序内统一换算为 bar（×10），阈值取自真实母管压力 5%~99% 分位（5.0~6.4 bar）
+  - 站点时间轴与回放逻辑在 `src/data/stationTime.ts`；健康评分/喘振算法在 `src/utils/health.ts`；站点常量单一来源在 `src/data/stationConfig.ts`
+  - Zustand persist key 为 `airpress-agent-store-v2`，更换数据结构时需同步提升 key 版本以丢弃旧缓存
+- Category: 排错调试
+- Instructions:
+  - 本环境未安装 tsx；跑 TS 冒烟脚本用 `./node_modules/.bin/esbuild <entry>.ts --bundle --platform=node --format=cjs --outfile=out.cjs && node out.cjs`

@@ -1,5 +1,6 @@
 import type { Device, PlanAction, PlanStrategy, SchedulePlan } from '../types'
 import { LOAD_FORECAST } from '../data/timeseries'
+import { STATION, LOAD } from '../data/stationConfig'
 
 /** 按加载率插值比功率 kW/(m³/min) */
 export function specificPowerAt(d: Device, loadRate: number): number {
@@ -138,14 +139,14 @@ export function generateCandidates(devices: Device[], hours: number, currentStra
     ]
     candidates.push(mk('balanced', `稳供前提下节能（推荐）`, 'balanced', on, explanation, {
       surgeRisk: 'low', overloadRisk: 'low', healthRisk: 'low',
-      pressureRiskText: '新启机组爬坡约 6 分钟，期间母管压力预计最低 0.786 bar（合格带 ≥0.78 bar），建议提前 10 分钟启机',
+      pressureRiskText: `新启机组爬坡期间母管压力预计短暂回落，合格带 ${STATION.pressureBandBar[0]}~${STATION.pressureBandBar[1]} bar，建议提前 10 分钟启机`,
     }, 99.6))
   }
 
   // ---- 方案 A：稳供优先（stability）----
   {
     const on = new Map<string, number>()
-    const maint = devices.find(d => d.id === 'AC-05')
+    const maint = devices.find(d => d.status === 'maintenance')
     const pool = [...running.filter(d => d.loadRate >= 50), ...standby]
     let supplied = 0
     for (const d of pool) {
@@ -172,7 +173,7 @@ export function generateCandidates(devices: Device[], hours: number, currentStra
   {
     const on = new Map<string, number>()
     for (const d of running) if (d.loadRate < 50 || d.healthScore < 75) on.set(d.id, 0)
-    const maint = devices.find(d => d.id === 'AC-05')
+    const maint = devices.find(d => d.status === 'maintenance')
     const pool = [...running.filter(d => (on.get(d.id) ?? d.loadRate) > 0), ...standby]
       .map(d => ({ d, sp: specificPowerAt(d, optimalBand(d)[0]) }))
       .sort((a, b) => a.sp - b.sp)
@@ -191,7 +192,7 @@ export function generateCandidates(devices: Device[], hours: number, currentStra
     const stopped = avail.filter(d => (on.get(d.id) ?? 0) === 0 && d.status === 'running')
     candidates.push(mk('protection', '设备保护优先', 'protection', on, [
       `以设备保护为第一目标：${stopped.map(d => `${d.id}`).join('、') || '无'} 停机休整，消除轴承/振动恶化风险`,
-      `AC-01 保持最优喘振裕度运行（裕度 ≥12%）`,
+      `两台机组按压力带约束运行，避免低载与温升/振动超限`,
       `在线产能 ${Math.round(supplied)} m³/min${supplied < need ? `，低于峰值需求 ${need}，需储气罐调节与错峰配合` : ''}`,
       `能耗推演：${e} kWh vs 基线 ${base} kWh（${saving >= 0 ? '节能' : '能耗增加'} ${Math.abs(saving)}%）`,
     ], {

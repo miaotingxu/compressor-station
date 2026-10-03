@@ -2,8 +2,8 @@ import { Tag, Tooltip, Alert, Typography } from 'antd'
 import { ExperimentOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import type { AlertLevel, DeviceStatus, PlanStatus, RiskLevel, WorkOrderStatus, StrategyStatus, PlanStrategy } from '../types'
 
-export const DemoTag = ({ text = '模拟数据 · 演示环境' }: { text?: string }) => (
-  <Tooltip title="当前环境所有运行数据、控制回执与收益均为本地模拟，用于演示完整业务闭环">
+export const DemoTag = ({ text = '运行数据真实 · 流程演示' }: { text?: string }) => (
+  <Tooltip title="站点运行数据来自主办方真实数据包；调度方案、控制回执、工单等业务流程为演示逻辑">
     <Tag icon={<ExperimentOutlined />} color="gold" style={{ marginLeft: 8 }}>{text}</Tag>
   </Tooltip>
 )
@@ -12,7 +12,7 @@ export const DemoAlertInline = ({ children }: { children?: React.ReactNode }) =>
   <Alert
     type="warning" showIcon banner
     icon={<ThunderboltOutlined />}
-    message={<span style={{ fontSize: 12.5 }}>演示环境：本页运行数据、控制指令与回执均为<b>本地模拟</b>，模拟 REST API 响应，与真实 PLC/SCADA 无关</span>}
+    message={<span style={{ fontSize: 12.5 }}>演示环境：本页运行数据来自<b>主办方真实数据包</b>；调度方案、控制指令与回执为演示逻辑（模拟 REST API 响应）</span>}
     description={children}
     style={{ marginBottom: 12 }}
   />

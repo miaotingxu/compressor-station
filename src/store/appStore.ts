@@ -10,6 +10,8 @@ import {
   ROLE_DEFS, STRATEGIES, TODOS, WORK_ORDERS, DEMO_NOW, fmt,
 } from '../data/initial'
 import { generateCandidates, flowAt, powerAt, specificPowerAt, optimalBand, peakDemand } from '../utils/scheduler'
+import { STATION } from '../data/stationConfig'
+import { sampleAt, clampToRange, type DeviceSample } from '../data/stationTime'
 
 export const now = () => fmt(dayjs())
 
@@ -36,12 +38,22 @@ interface AppState {
   /** 模拟"高风险喘振"安全拦截开关：开启后阻断调度下发 */
   simulateSurgeBlock: boolean
   generating: boolean
+  /** 站点数据时间轴：当前定位到的真实数据时刻 */
+  dataTime: string
+  /** 历史回放播放状态 */
+  replayPlaying: boolean
 
   switchRole: (r: RoleKey) => void
   me: () => Member
   roleOf: () => string
 
   refreshRealtime: () => void
+  /** 将时间轴定位到指定时刻，并同步设备遥测 */
+  setDataTime: (t: string) => void
+  /** 播放 / 暂停历史回放 */
+  toggleReplay: () => void
+  /** 回放前进一步（1 小时） */
+  stepReplay: () => void
   toggleDataOutage: (v: boolean) => void
   toggleSurgeBlock: (v: boolean) => void
 
@@ -76,6 +88,28 @@ interface AppState {
 
 const initialDevices = () => DEVICES.map(d => ({ ...d, curve: d.curve.map(c => ({ ...c })) }))
 
+/** 用真实时序采样值同步设备遥测（替代原先的随机抖动） */
+function applySamples(devices: Device[], samples: DeviceSample[]): Device[] {
+  const map = new Map(samples.map(s => [s.id, s]))
+  return devices.map(d => {
+    const s = map.get(d.id)
+    if (!s) return d
+    return {
+      ...d,
+      status: s.running ? 'running' : 'standby',
+      loadRate: Math.round(s.loadRate),
+      pressureBar: +s.pressureBar.toFixed(2),
+      flowM3Min: +s.flowM3Min.toFixed(1),
+      powerKw: Math.round(s.powerKw),
+      currentA: +s.currentA.toFixed(1),
+      vibration: s.vibration,
+      windingTempC: s.windingTempC,
+      bearingTempC: s.bearingTempC,
+      oilPressureBar: s.oilPressureBar,
+    }
+  })
+}
+
 export const useApp = create<AppState>()(
   persist(
     (set, get) => ({
@@ -93,6 +127,8 @@ export const useApp = create<AppState>()(
       simulateDataOutage: false,
       simulateSurgeBlock: false,
       generating: false,
+      dataTime: STATION.rangeEnd,
+      replayPlaying: false,
 
       switchRole: (r) => {
         const member = MEMBERS.find(m => m.role === r)!
@@ -103,20 +139,27 @@ export const useApp = create<AppState>()(
       roleOf: () => ROLE_DEFS.find(r => r.key === get().currentRole)!.name,
 
       refreshRealtime: () => {
-        set(s => ({
-          devices: s.devices.map(d => {
-            if (d.status !== 'running') return d
-            const jitter = (base: number, pct: number) => +(base * (1 + (Math.random() - 0.5) * pct)).toFixed(1)
-            return {
-              ...d,
-              pressureBar: +(d.pressureBar + (Math.random() - 0.5) * 0.012).toFixed(3),
-              flowM3Min: +jitter(d.flowM3Min, 0.03),
-              powerKw: +jitter(d.powerKw, 0.02),
-              loadRate: Math.min(100, Math.max(5, Math.round(d.loadRate + (Math.random() - 0.5) * 2))),
-              bearingTempC: d.kind === 'dryer' ? d.bearingTempC : +(d.bearingTempC + (Math.random() - 0.5) * 0.6).toFixed(1),
-            }
-          }),
-        }))
+        const { dataTime } = get()
+        const { devices } = sampleAt(dataTime)
+        set(s => ({ devices: applySamples(s.devices, devices) }))
+      },
+
+      setDataTime: (t) => {
+        const tt = clampToRange(t)
+        const { devices } = sampleAt(tt)
+        set(s => ({ dataTime: tt, devices: applySamples(s.devices, devices) }))
+      },
+
+      toggleReplay: () => set(s => ({ replayPlaying: !s.replayPlaying })),
+
+      stepReplay: () => {
+        const s = get()
+        const next = dayjs(s.dataTime).add(1, 'hour')
+        if (next.isAfter(dayjs(STATION.rangeEnd))) {
+          set({ replayPlaying: false, dataTime: STATION.rangeEnd })
+          return
+        }
+        get().setDataTime(next.format('YYYY-MM-DD HH:mm:ss'))
       },
 
       toggleDataOutage: (v) => {
@@ -292,7 +335,7 @@ export const useApp = create<AppState>()(
         }
         if (s.simulateSurgeBlock || plan.surgeBlocked) {
           set(st => ({ plans: st.plans.map(p => p.id === planId ? { ...p, surgeBlocked: true } : p) }))
-          s.addAudit('调度下发被安全拦截', planId, '检测到高风险喘振告警（AC-01），调度下发已阻断，进入应急处置流程', 'denied')
+          s.addAudit('调度下发被安全拦截', planId, '检测到高风险设备告警（5# 二级振动），调度下发已阻断，进入应急处置流程', 'denied')
           return
         }
         const me = s.me()
@@ -307,8 +350,8 @@ export const useApp = create<AppState>()(
           await new Promise(r => setTimeout(r, 700 + Math.random() * 900))
           let result: 'success' | 'failed' | 'timeout' = 'success'
           let message = '执行成功，回执确认'
-          // AC-04 固件老旧：30% 概率超时（演示场景）
-          if (act.deviceId === 'AC-04' && Math.random() < 0.3) {
+          // 网关可靠性由设备档案（数据完整性）决定，不再写死机组编号
+          if (d.gatewayReliable === false && Math.random() < 0.3) {
             result = 'timeout'
             message = '控制网关未在 10s 内返回回执，执行状态未知，需人工核实'
           }
@@ -414,7 +457,8 @@ export const useApp = create<AppState>()(
       clearChat: () => set({ chat: [] }),
     }),
     {
-      name: 'airpress-agent-store',
+      // v2：真实站点重构后更换 key，避免旧版 5 机组本地缓存污染
+      name: 'airpress-agent-store-v2',
       partialize: (s) => ({
         currentRole: s.currentRole, devices: s.devices, alerts: s.alerts, plans: s.plans,
         workOrders: s.workOrders, strategies: s.strategies, todos: s.todos, auditLogs: s.auditLogs,
@@ -433,7 +477,7 @@ export function useDataQualityBlock(): { blocked: boolean; reasons: string[] } {
       blocked: true,
       reasons: [
         'SCADA 实时库（DS-SCADA-01）通讯中断：母管压力、总流量点位数据陈旧 >15 分钟',
-        'AC-02/AC-04 控制网关字段缺失：排气温度、加载率反馈缺失',
+        '4#/5# 控制网关字段缺失：B 相电流全程为 0、加卸载/预警字段缺失',
         '按安全规则：数据质量不合格时禁止生成可下发调度方案',
       ],
     }
@@ -441,7 +485,9 @@ export function useDataQualityBlock(): { blocked: boolean; reasons: string[] } {
   if (blocking.length) {
     return { blocked: true, reasons: blocking.map(i => i.detail) }
   }
-  return { blocked: false, reasons: [] }
+  // 未阻断时，返回严重未解决项作为关注提示（不阻断）
+  const attention = dataIssues.filter(i => i.severity === 'critical' && !i.resolved)
+  return { blocked: false, reasons: attention.map(i => `[关注] ${i.detail}`) }
 }
 
 export const AGENT_META = { DEMO_NOW }

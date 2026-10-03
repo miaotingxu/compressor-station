@@ -3,18 +3,30 @@ import type {
   Alert, AuditLog, DataQualityIssue, DataSource, Device, Diagnosis, Member, RoleDef,
   SchedulePlan, StrategyVersion, TodoItem, WorkOrder, MonthlyReport,
 } from '../types'
+import { REAL } from './realDataset'
+import { STATION } from './stationConfig'
+import { assessHealth } from '../utils/health'
 
-/** 演示环境时间基准：应用加载时刻 */
-export const DEMO_NOW = dayjs()
+/**
+ * 真实站点数据基准日：主办方数据包时间范围的末尾。
+ * 原演示程序以「应用加载时刻」为基准，真实数据为 2026-03-12 ~ 2026-09-12 的历史归档，
+ * 因此这里统一以数据末尾作为站点状态的基准时刻。
+ */
+export const DEMO_NOW = dayjs(REAL.meta.rangeEnd)
 export const fmt = (d: dayjs.Dayjs) => d.format('YYYY-MM-DD HH:mm:ss')
 export const fmtShort = (d: dayjs.Dayjs) => d.format('MM-DD HH:mm')
 const ago = (h: number) => fmt(DEMO_NOW.subtract(h, 'hour'))
 const agoD = (d: number) => DEMO_NOW.subtract(d, 'day').format('YYYY-MM-DD')
 
-export const SITE = { factory: '海川精工', name: '1 号空压站', id: 'AS-01', region: '华东制造基地' }
+export const SITE = {
+  factory: STATION.factory,
+  name: STATION.name,
+  id: STATION.id,
+  region: `真实数据集（${STATION.rangeStart.slice(0, 10)} ~ ${STATION.rangeEnd.slice(0, 10)}）`,
+}
 
-// ================= 设备档案 =================
-/** 性能曲线：比功率 kW/(m³/min)，越低越好。离心机 70-85% 加载率最优，低载时急剧恶化并逼近喘振区 */
+// ================= 设备档案（2 台真实机组） =================
+/** 离心机性能曲线：比功率 kW/(m³/min)，输入为额定比功率 */
 const centrifugalCurve = (base: number) => [
   { loadRate: 25, specificPower: +(base * 1.72).toFixed(2) },
   { loadRate: 35, specificPower: +(base * 1.45).toFixed(2) },
@@ -25,181 +37,146 @@ const centrifugalCurve = (base: number) => [
   { loadRate: 85, specificPower: +(base * 1.0).toFixed(2) },
   { loadRate: 95, specificPower: +(base * 1.06).toFixed(2) },
 ]
-/** 螺杆机曲线：55-75% 较优 */
-const screwCurve = (base: number) => [
-  { loadRate: 20, specificPower: +(base * 1.38).toFixed(2) },
-  { loadRate: 30, specificPower: +(base * 1.22).toFixed(2) },
-  { loadRate: 40, specificPower: +(base * 1.12).toFixed(2) },
-  { loadRate: 50, specificPower: +(base * 1.05).toFixed(2) },
-  { loadRate: 60, specificPower: +(base * 1.0).toFixed(2) },
-  { loadRate: 70, specificPower: +(base * 0.99).toFixed(2) },
-  { loadRate: 80, specificPower: +(base * 1.02).toFixed(2) },
-  { loadRate: 90, specificPower: +(base * 1.09).toFixed(2) },
-]
 
-export const DEVICES: Device[] = [
-  {
-    id: 'AC-01', name: '1# 离心式空压机', kind: 'centrifugal', brand: '海川动力', model: 'HC-C1600',
-    ratedPowerKw: 1600, ratedFlowM3Min: 240, status: 'running',
-    loadRate: 78, pressureBar: 0.82, flowM3Min: 187, powerKw: 1216,
-    healthScore: 86, surgeRisk: 'medium', runningHours: 28650, installedAt: '2019-06-12', lastMaintenanceAt: agoD(75),
-    nextMaintenanceDueHours: 1350, curve: centrifugalCurve(6.67),
-    vibration: 3.1, bearingTempC: 71, windingTempC: 68, currentA: 218, oilPressureBar: 0.31,
-    note: '一级叶轮振动有上升趋势，进口滤网压差 4.2 kPa 偏高导致吸入流量下降，喘振裕度收窄，已列入重点观察。',
-  },
-  {
-    id: 'AC-02', name: '2# 离心式空压机', kind: 'centrifugal', brand: '海川动力', model: 'HC-C1320',
-    ratedPowerKw: 1320, ratedFlowM3Min: 200, status: 'running',
-    loadRate: 65, pressureBar: 0.81, flowM3Min: 130, powerKw: 832,
-    healthScore: 71, surgeRisk: 'low', runningHours: 24310, installedAt: '2020-03-18', lastMaintenanceAt: agoD(210),
-    nextMaintenanceDueHours: 90, curve: centrifugalCurve(6.6),
-    vibration: 6.8, bearingTempC: 88, windingTempC: 74, currentA: 142, oilPressureBar: 0.29,
-    note: '驱动端轴承温度与振动持续偏高，诊断为轴承磨损早期，建议 72h 内安排检修，检修前建议降载运行。',
-  },
-  {
-    id: 'AC-03', name: '3# 螺杆式空压机', kind: 'screw', brand: '霍尼康', model: 'HK-S250',
-    ratedPowerKw: 250, ratedFlowM3Min: 40, status: 'running',
-    loadRate: 32, pressureBar: 0.80, flowM3Min: 12.8, powerKw: 101,
-    healthScore: 90, surgeRisk: 'none', runningHours: 15820, installedAt: '2021-09-02', lastMaintenanceAt: agoD(120),
-    nextMaintenanceDueHours: 1800, curve: screwCurve(6.25),
-    vibration: 1.9, bearingTempC: 62, windingTempC: 59, currentA: 42, oilPressureBar: 0.35,
-    note: '长期低加载率运行（约 32%），处于"大马拉小车"工况，比功率 7.6 kW/(m³/min)，较本机最优值 6.19 偏高约 23%。',
-  },
-  {
-    id: 'AC-04', name: '4# 螺杆式空压机', kind: 'screw', brand: '霍尼康', model: 'HK-S355',
-    ratedPowerKw: 355, ratedFlowM3Min: 60, status: 'standby',
-    loadRate: 0, pressureBar: 0, flowM3Min: 0, powerKw: 0,
-    healthScore: 93, surgeRisk: 'none', runningHours: 11240, installedAt: '2022-05-20', lastMaintenanceAt: agoD(60),
-    nextMaintenanceDueHours: 2400, curve: screwCurve(5.92),
-    vibration: 0, bearingTempC: 28, windingTempC: 26, currentA: 0, oilPressureBar: 0,
-    note: '热备机组，本站效率最高机组（70% 加载率比功率 5.86）；控制网关固件版本较低，历史下发偶发回执超时。',
-  },
-  {
-    id: 'AC-05', name: '5# 离心式空压机', kind: 'centrifugal', brand: '海川动力', model: 'HC-C1100',
-    ratedPowerKw: 1100, ratedFlowM3Min: 160, status: 'maintenance',
-    loadRate: 0, pressureBar: 0, flowM3Min: 0, powerKw: 0,
-    healthScore: 78, surgeRisk: 'none', runningHours: 20110, installedAt: '2020-11-08', lastMaintenanceAt: ago(26),
-    nextMaintenanceDueHours: 720, curve: centrifugalCurve(6.88),
-    vibration: 0, bearingTempC: 0, windingTempC: 0, currentA: 0, oilPressureBar: 0,
-    note: '计划性大修中（更换三级冷却器芯），预计还需 18 小时恢复，检修期间数据通道暂停。', 
-  },
-  {
-    id: 'DR-01', name: '1# 冷冻式干燥机', kind: 'dryer', brand: '赛尔干燥', model: 'SE-120',
-    ratedPowerKw: 12, ratedFlowM3Min: 120, status: 'running',
-    loadRate: 74, pressureBar: 0.80, flowM3Min: 89, powerKw: 9.6,
-    healthScore: 92, surgeRisk: 'none', runningHours: 22000, installedAt: '2020-03-18', lastMaintenanceAt: agoD(90),
-    nextMaintenanceDueHours: 1500, curve: [], vibration: 1.2, bearingTempC: 0, windingTempC: 0, currentA: 18, oilPressureBar: 0,
-    note: '露点 -22℃，运行正常。',
-  },
-  {
-    id: 'DR-02', name: '2# 冷冻式干燥机', kind: 'dryer', brand: '赛尔干燥', model: 'SE-120',
-    ratedPowerKw: 12, ratedFlowM3Min: 120, status: 'running',
-    loadRate: 71, pressureBar: 0.80, flowM3Min: 86, powerKw: 9.3,
-    healthScore: 89, surgeRisk: 'none', runningHours: 21400, installedAt: '2020-03-18', lastMaintenanceAt: agoD(90),
-    nextMaintenanceDueHours: 1620, curve: [], vibration: 1.3, bearingTempC: 0, windingTempC: 0, currentA: 17.5, oilPressureBar: 0,
-    note: '露点 -21℃，运行正常。',
-  },
-  {
-    id: 'AT-01', name: '1# 储气罐', kind: 'tank', brand: '本地制造', model: 'AT-30m³',
-    ratedPowerKw: 0, ratedFlowM3Min: 0, status: 'running',
-    loadRate: 0, pressureBar: 0.81, flowM3Min: 0, powerKw: 0,
-    healthScore: 96, surgeRisk: 'none', runningHours: 44000, installedAt: '2019-06-12', lastMaintenanceAt: agoD(30),
-    nextMaintenanceDueHours: 0, curve: [], vibration: 0, bearingTempC: 0, windingTempC: 0, currentA: 0, oilPressureBar: 0,
-    note: '容积 30m³，年检有效期至 2027-04。',
-  },
-  {
-    id: 'AT-02', name: '2# 储气罐', kind: 'tank', brand: '本地制造', model: 'AT-20m³',
-    ratedPowerKw: 0, ratedFlowM3Min: 0, status: 'running',
-    loadRate: 0, pressureBar: 0.80, flowM3Min: 0, powerKw: 0,
-    healthScore: 95, surgeRisk: 'none', runningHours: 39800, installedAt: '2020-03-18', lastMaintenanceAt: agoD(30),
-    nextMaintenanceDueHours: 0, curve: [], vibration: 0, bearingTempC: 0, windingTempC: 0, currentA: 0, oilPressureBar: 0,
-    note: '容积 20m³，年检有效期至 2026-11。',
-  },
-]
+const deviceNote = (id: string, seed: typeof REAL.devices[number]): string => {
+  const run = seed.runningHours == null ? '累计运行时间字段溢出不可用' : `累计运行 ${seed.runningHours} h`
+  const maint = seed.nextMaintenanceDueHours == null
+    ? '下次保养剩余时间字段异常'
+    : `距下次保养 ${seed.nextMaintenanceDueHours} h`
+  const extra = id === 'AC-04'
+    ? '空气过滤器压降过半为负值，量程存疑；本机停机时长占比约 17.6%。'
+    : '二级振动均值约 9.1 mm/s，高于 ISO 10816 C 区下限。'
+  return `阿特拉斯 ${seed.model}（${seed.code}），额定 ${seed.ratedPowerKw} kW / ${seed.ratedFlowM3Min} m³/min。${run}，${maint}。${extra}`
+}
+
+export const DEVICES: Device[] = REAL.devices.map(seed => {
+  // 健康分与喘振风险由真实测点经算法计算，不再使用写死常量
+  const health = assessHealth({
+    vibration: seed.vibration,
+    windingTempC: seed.windingTempC,
+    bearingTempC: seed.bearingTempC,
+    exhaustTempC: seed.exhaustTempC,
+    oilPressureBar: seed.oilPressureBar,
+    bovPct: seed.bovPct,
+    igvPct: seed.igvPct,
+  })
+  return {
+    id: seed.id,
+    name: seed.name,
+    kind: seed.kind,
+    brand: seed.brand,
+    model: seed.model,
+    ratedPowerKw: seed.ratedPowerKw,
+    ratedFlowM3Min: seed.ratedFlowM3Min,
+    status: seed.status,
+    loadRate: seed.loadRate,
+    pressureBar: seed.pressureBar,
+    flowM3Min: seed.flowM3Min,
+    powerKw: seed.powerKw,
+    healthScore: health.score,
+    surgeRisk: health.surgeRisk,
+    runningHours: seed.runningHours ?? 0,
+    installedAt: seed.installedAt,
+    lastMaintenanceAt: agoD(30),
+    nextMaintenanceDueHours: seed.nextMaintenanceDueHours ?? 0,
+    curve: centrifugalCurve(seed.ratedSpecificPower),
+    vibration: seed.vibration,
+    bearingTempC: seed.bearingTempC,
+    windingTempC: seed.windingTempC,
+    currentA: seed.currentA,
+    oilPressureBar: seed.oilPressureBar,
+    exhaustTempC: seed.exhaustTempC,
+    igvPct: seed.igvPct,
+    bovPct: seed.bovPct,
+    healthFindings: health.findings,
+    gatewayReliable: seed.gatewayReliable,
+    note: deviceNote(seed.id, seed),
+  }
+})
 
 export const DEVICE_MAP: Record<string, Device> = Object.fromEntries(DEVICES.map(d => [d.id, d]))
 export const COMPRESSORS = DEVICES.filter(d => d.kind === 'centrifugal' || d.kind === 'screw')
 
-// ================= 告警 =================
+// ================= 告警（基于真实数据统计） =================
 export const ALERTS: Alert[] = [
   {
-    id: 'AL-20260921-001', deviceId: 'AC-03', level: 'warning', type: 'load_anomaly',
-    title: 'AC-03 持续低加载率运行（"大马拉小车"）',
-    description: '近 72 小时平均加载率 31.5%，低于经济运行下限 55%，单位产气能耗比最优区间高约 22%。建议纳入本轮调度优化。',
-    raisedAt: ago(6), status: 'unconfirmed',
+    id: 'AL-20260912-001', deviceId: 'AC-05', level: 'warning', type: 'vibration',
+    title: '5# 二级振动偏高（均值约 9.1 mm/s）',
+    description: '5# 机组二级转子振动全周期均值约 9.1 mm/s，高于 ISO 10816 C 区下限 7.1 mm/s；峰值 25.2 mm/s。建议核查轴承状态与对中。',
+    raisedAt: ago(4), status: 'unconfirmed', relatedDiagnosisId: 'DG-20260912-001',
   },
   {
-    id: 'AL-20260921-002', deviceId: 'AC-02', level: 'critical', type: 'bearing',
-    title: 'AC-02 驱动端轴承温度超阈值（88℃）',
-    description: '轴承温度连续 4 小时超过 85℃ 报警阈值，振动速度 6.8 mm/s 接近 ISO 10816 C 区上限。结合频谱特征诊断为轴承磨损早期，预计 36 小时内需检修。',
-    raisedAt: ago(4), status: 'unconfirmed', relatedDiagnosisId: 'DG-20260921-002',
+    id: 'AL-20260912-002', deviceId: 'AC-04', level: 'critical', type: 'bearing',
+    title: '4# 排气/绕组温度接近报警',
+    description: '4# 排气温度峰值 115℃、电机绕组温度峰值 90℃、油箱油温均值约 55℃。冷却水温度均值 30.8℃，需核查中冷/后冷换热效率与冷却水流量。',
+    raisedAt: ago(6), status: 'unconfirmed', relatedDiagnosisId: 'DG-20260912-002',
   },
   {
-    id: 'AL-20260921-003', deviceId: 'AC-01', level: 'critical', type: 'surge',
-    title: 'AC-01 喘振裕度收窄，接近喘振边界',
-    description: '当前运行点距喘振边界 8.6%（安全裕度阈值 10%），进口导叶开度与管网阻力组合工况不利。若负荷继续上升或母管压力抬升，存在喘振风险，预计提前量 45 秒可触发紧急联锁保护。',
-    raisedAt: ago(2), status: 'unconfirmed', relatedDiagnosisId: 'DG-20260921-003',
+    id: 'AL-20260912-003', deviceId: 'AC-04', level: 'critical', type: 'data_quality',
+    title: '4#/5# B 相电流全程恒为 0',
+    description: '设备运行参数中 4#、5# B 相电流全程为 0，仅有 A/C 相有效，三相不平衡与过流保护无法核验，属数据质量问题。',
+    raisedAt: ago(8), status: 'unconfirmed',
   },
   {
-    id: 'AL-20260920-004', deviceId: 'DR-01', level: 'warning', type: 'data_quality',
-    title: 'DR-01 露点数据更新延迟',
-    description: '露点变送器数据最后更新时间距当前 2.1 小时，超过 1 小时陈旧阈值，已通知仪表班检查通讯。',
-    raisedAt: ago(9), status: 'confirmed', confirmedBy: '张伟', confirmedAt: ago(8),
+    id: 'AL-20260912-004', deviceId: 'AC-04', level: 'warning', type: 'load_anomaly',
+    title: '4# 停机时长占比偏高（约 17.6%）',
+    description: '4# 全周期停机约 4.66 万分钟（占比约 17.6%），5# 仅约 3%。两台机组出力分配不均，可优化轮换与负载均衡。',
+    raisedAt: ago(10), status: 'unconfirmed',
   },
   {
-    id: 'AL-20260919-005', deviceId: 'AC-02', level: 'warning', type: 'vibration',
-    title: 'AC-02 振动速度上升趋势',
-    description: '驱动端轴承振动 7 日内由 4.2 mm/s 上升至 6.8 mm/s，增幅 62%，建议关注。',
-    raisedAt: ago(30), status: 'to_workorder', confirmedBy: '刘强', confirmedAt: ago(28), relatedWorkOrderId: 'WO-20260920-002',
+    id: 'AL-20260912-005', deviceId: 'AC-05', level: 'warning', type: 'data_quality',
+    title: '加卸载与预警字段缺失',
+    description: '运行事件记录中 4#/5# 加卸载字段全程为空、预警字段全程为 0，无法还原加减载时序与预警记录。',
+    raisedAt: ago(12), status: 'confirmed', confirmedBy: '张伟', confirmedAt: ago(11),
   },
   {
-    id: 'AL-20260918-006', deviceId: 'AT-01', level: 'info', type: 'pressure',
+    id: 'AL-20260911-006', deviceId: 'AC-04', level: 'info', type: 'pressure',
     title: '母管压力短时波动',
-    description: '09-18 14:20 母管压力短时波动 0.82→0.76→0.81 bar，持续 90 秒，与产线批次用气相关，未低于合格下限。',
-    raisedAt: ago(80), status: 'closed', confirmedBy: '张伟', confirmedAt: ago(79),
-    conclusion: '确认为三车间批次投料集中用气所致，属正常工况波动，加强排班错峰即可。', closedAt: ago(78),
+    description: '全周期母管压力 5%~99% 区间为 5.0~6.4 bar，最低 4.8 bar、最高 7.1 bar，合格带按 5.0~6.4 bar 统计合格率约 94.8%。',
+    raisedAt: ago(30), status: 'closed', confirmedBy: '张伟', confirmedAt: ago(29),
+    conclusion: '波动与批次用气及机组轮换相关，属工艺性波动，已纳入压力合格率统计口径。', closedAt: ago(28),
   },
 ]
 
 // ================= 诊断结论 =================
 export const DIAGNOSES = [
   {
-    id: 'DG-20260921-001', deviceId: 'AC-03',
-    conclusion: 'AC-03 长期处于低加载率运行（平均 31.5%），偏离经济运行区间，单位产气能耗偏高约 22%，并存在停机周期性启停损耗。',
+    id: 'DG-20260912-001', deviceId: 'AC-05',
+    conclusion: '5# 二级转子振动全周期均值约 9.1 mm/s，超出 ISO 10816 C 区下限，存在轴承磨损或转子对中不良风险，建议 72h 内停机核查。',
     evidence: [
-      '近 30 天加载率分布：24%~38% 区间占比 81%，仅 4% 时间处于 55% 以上',
-      '当前比功率 7.63 kW/(m³/min)，高于该机型最优比功率 6.19 约 23.3%',
-      '启停次数：日均 9.2 次，远高于经济运行参考值 ≤2 次/日',
-      '电流 42A，约为额定电流的 34%，效率处于低效区',
+      '二级振动均值 9.08 mm/s、峰值 25.15 mm/s（全周期）',
+      '一级/三级振动均值分别约 3.5 / 3.9 mm/s，二级显著偏高，指向二级转子',
+      '电机轴承 D 端温度均值 41.4℃，尚处正常区间',
+      '5# 全周期运行率约 97%，负载时间 4309 h',
     ],
-    riskLevel: 'medium', possibleCauses: ['选型余量过大（设计选型按远期负荷）', '调度策略未考虑机组容量匹配', '夜间低谷时段仍保持该机组运行'],
-    suggestedActions: ['纳入智能调度：夜间与低峰时段停运 AC-03，改由 AC-04 承担', '恢复后保持在 55%~75% 加载率区间运行', '持续跟踪两周并复核收益'],
-    diagnosedAt: ago(7), modelVersion: '.diag-bearing-v2.3', advanceNoticeHours: 72,
+    riskLevel: 'medium', possibleCauses: ['二级转子轴承磨损', '转子动平衡劣化', '联轴器对中偏差'],
+    suggestedActions: ['72h 内安排二级转子振动频谱复测', '核查轴承润滑与对中', '复测指标：二级振动 ≤ 7.1 mm/s'],
+    diagnosedAt: ago(4), modelVersion: 'diag-vibration-v1.0', advanceNoticeHours: 72,
   },
   {
-    id: 'DG-20260921-002', deviceId: 'AC-02',
-    conclusion: 'AC-02 驱动端轴承磨损早期，若不处理预计 36 小时内发展为二级报警，7 天内出现非计划停机概率 63%。',
+    id: 'DG-20260912-002', deviceId: 'AC-04',
+    conclusion: '4# 排气温度峰值 115℃、绕组峰值 90℃，冷却水均值 30.8℃，判断为中冷/后冷换热效率下降或冷却水流量不足，属可控温升异常。',
     evidence: [
-      '轴承温度 88℃，超报警阈值 85℃，连续 4 小时',
-      '振动速度 6.8 mm/s（ISO 10816 由 B 区进入 C 区边缘）',
-      '包络谱 2× 轴频与 4× 轴频幅值 30 天内增长 2.4 倍，符合滚动体剥落早期特征',
-      '该轴承上次更换距今 210 天，处于寿命中后段',
+      '排气温度均值 88.0℃、峰值 115℃',
+      '电机绕组 1U1 峰值 90℃、均值约 69℃',
+      '冷却水温度均值 30.8℃、峰值 45℃',
+      '油箱油温均值约 55℃',
     ],
-    riskLevel: 'high', possibleCauses: ['轴承滚道疲劳剥落（主因）', '润滑脂老化', '对中偏差'],
-    suggestedActions: ['72 小时内安排计划性检修，更换驱动端轴承与润滑脂', '检修前降载至 60% 运行，降低轴承受力', '复测指标：轴承温度 ≤70℃、振动 ≤4.5 mm/s'],
-    diagnosedAt: ago(4), modelVersion: 'diag-bearing-v2.3', advanceNoticeHours: 36,
+    riskLevel: 'medium', possibleCauses: ['中冷/后冷换热面结垢', '冷却水流量不足', '环境温度偏高（站房峰值 45.9℃）'],
+    suggestedActions: ['检查冷却水流量与进出水温差', '清理中冷/后冷换热面', '复测指标：排气温度峰值 ≤ 100℃'],
+    diagnosedAt: ago(6), modelVersion: 'diag-thermal-v1.0', advanceNoticeHours: 24,
   },
   {
-    id: 'DG-20260921-003', deviceId: 'AC-01',
-    conclusion: 'AC-01 运行点逼近喘振边界，当前裕度 8.6%，低于安全阈值 10%。本站为定压母管系统，负荷突增时该机易先进入喘振区。',
+    id: 'DG-20260912-003', deviceId: 'AC-04',
+    conclusion: '4#/5# B 相电流全程为 0，三相电流监测不完整，过流与不平衡保护依据不足，需先修复数据链路再评估设备电气健康。',
     evidence: [
-      '喘振边界模型：机前压力 0.82 bar、导叶开度 62% 时，喘振点流量 201 m³/min，当前流量 187 m³/min',
-      '防喘阀开度 12%，回流内循环使功率损失约 3.1%',
-      '近 7 日裕度从 14.2% 收窄至 8.6%，与滤网压差上升相关（4.2 kPa，建议值 ≤4.0 kPa）',
+      'B 相电流全周期恒为 0（4#、5# 均是）',
+      'A 相电流均值 75.4 A、C 相 67.9 A（4#），三相不平衡无法计算',
+      'A 相存在 1944 A 级尖峰，疑为采样异常',
     ],
-    riskLevel: 'high', possibleCauses: ['进口滤网堵塞导致吸入流量下降', '管网阻力上升', '导叶执行器偏差'],
-    suggestedActions: ['立即执行：提高防喘振控制器裕度设定至 12%', ' 8 小时内安排清理或更换进口滤网', '负荷调度避开 AC-01 低流量工况，必要时停机防喘振联锁自检'],
-    diagnosedAt: ago(2), modelVersion: 'surge-guard-v3.1', advanceNoticeHours: 0,
+    riskLevel: 'low', possibleCauses: ['B 相电流互感器/采集通道未接入', '点表字段映射错误'],
+    suggestedActions: ['核查 B 相电流采集通道与点表映射', '修复后重新计算三相不平衡度'],
+    diagnosedAt: ago(8), modelVersion: 'diag-dataquality-v1.0', advanceNoticeHours: 0,
   },
 ]
 export const DIAGNOSIS_MAP = Object.fromEntries(DIAGNOSES.map(d => [d.id, d]))
@@ -207,206 +184,169 @@ export const DIAGNOSIS_MAP = Object.fromEntries(DIAGNOSES.map(d => [d.id, d]))
 // ================= 工单 =================
 export const WORK_ORDERS: WorkOrder[] = [
   {
-    id: 'WO-20260905-001', deviceId: 'AC-05', title: 'AC-05 三级冷却器芯更换（计划性大修）',
-    description: '三级冷却器端差持续 >12℃，冷却效率下降，按计划进行大修更换冷却器芯并做整机性能复测。',
-    priority: 'medium', status: 'closed', assignee: '赵勇', plannedAt: agoD(26),
-    repairRecord: '09-05 拆检确认冷却器芯结垢；09-08 更换三级冷却器芯并试压合格；09-09 整机加载测试正常。',
-    spareParts: [{ name: '三级冷却器芯', spec: 'HC-C1100 原厂件', qty: 1 }, { name: '密封垫片套件', spec: '标准套件', qty: 1 }],
-    retestMetrics: [
-      { name: '冷却器端差', before: '12.4℃', after: '6.8℃', pass: true },
-      { name: '满载比功率', before: '0.1162', after: '0.1098', pass: true },
-      { name: '振动速度', before: '2.9 mm/s', after: '2.6 mm/s', pass: true },
-    ],
-    acceptance: '复测三项指标全部合格，试运行 24 小时无异常，验收通过。', createdAt: agoD(28), closedAt: agoD(20), source: 'manual',
+    id: 'WO-20260912-001', deviceId: 'AC-05', title: '5# 二级转子振动异常核查',
+    description: '二级振动均值 9.1 mm/s 超 C 区下限（DG-20260912-001），安排频谱复测并核查轴承与对中。',
+    priority: 'high', status: 'assigned', assignee: '刘强', plannedAt: DEMO_NOW.add(1, 'day').format('YYYY-MM-DD'),
+    repairRecord: '', spareParts: [{ name: '振动传感器校验套件', spec: '标准', qty: 1 }], retestMetrics: [],
+    acceptance: '', createdAt: ago(4), source: 'diagnosis', relatedDiagnosisId: 'DG-20260912-001',
   },
   {
-    id: 'WO-20260920-002', deviceId: 'AC-02', title: 'AC-02 驱动端轴承温度/振动异常检修',
-    description: '振动 7 日上升 62%，轴承温度 88℃ 超阈值。诊断为轴承磨损早期（DG-20260921-002），计划更换驱动端轴承并复测。',
-    priority: 'critical', status: 'retest_pending', assignee: '刘强', plannedAt: DEMO_NOW.add(1, 'day').format('YYYY-MM-DD'),
-    repairRecord: '已完成驱动端轴承拆除，发现滚道轻微剥落；新轴承已就位，等待班后停机窗口安装并复测。',
-    spareParts: [{ name: '驱动端轴承', spec: 'SKF 22220 E', qty: 1 }, { name: '高温润滑脂', spec: 'LGHP 2/1kg', qty: 2 }],
+    id: 'WO-20260911-002', deviceId: 'AC-04', title: '4# 冷却系统换热效率检查',
+    description: '排气温度峰值 115℃（DG-20260912-002），检查冷却水流量、清理中冷/后冷换热面并复测排气温度。',
+    priority: 'medium', status: 'retest_pending', assignee: '赵勇', plannedAt: agoD(1),
+    repairRecord: '已完成冷却水流量测量与换热面冲洗，等待负载复测。',
+    spareParts: [{ name: '换热面清洗剂', spec: '标准', qty: 2 }],
     retestMetrics: [
-      { name: '轴承温度', before: '88℃', after: '69℃', pass: true },
-      { name: '振动速度', before: '6.8 mm/s', after: '3.8 mm/s', pass: true },
-      { name: '油压', before: '0.29 bar', after: '0.31 bar', pass: true },
+      { name: '排气温度峰值', before: '115℃', after: '99℃', pass: true },
+      { name: '冷却水进出温差', before: '14.2℃', after: '9.6℃', pass: true },
     ],
-    acceptance: '', createdAt: ago(28), source: 'alert', relatedAlertId: 'AL-20260919-005', relatedDiagnosisId: 'DG-20260921-002',
-  },
-  {
-    id: 'WO-20260921-003', deviceId: 'AC-01', title: 'AC-01 进口滤网清理与防喘阀校验',
-    description: '滤网压差 4.2 kPa 超建议值，喘振裕度收窄至 8.6%（DG-20260921-003）。安排滤网清理并校验防喘阀与导叶执行器。',
-    priority: 'high', status: 'created', assignee: '', plannedAt: DEMO_NOW.add(8, 'hour').format('YYYY-MM-DD HH:00'),
-    repairRecord: '', spareParts: [{ name: '进口滤网', spec: 'HC-C1600 标准滤芯', qty: 1 }], retestMetrics: [],
-    acceptance: '', createdAt: ago(2), source: 'diagnosis', relatedDiagnosisId: 'DG-20260921-003',
+    acceptance: '', createdAt: ago(6), source: 'diagnosis', relatedDiagnosisId: 'DG-20260912-002',
   },
 ]
 
-// ================= 调度方案 =================
-/**
- * 方案批次一（已完成闭环）：PLAN-20260919 批次，稳供前提下节能，已执行+复盘。
- * 方案二（异常闭环）：PLAN-20260920-002 下发时 AC-04 回执超时 → 状态未知。
- * 当前待审批：PLAN-20260921 批次候选方案。
- */
+// ================= 调度方案（2 机组真实站点） =================
 export const PLANS: SchedulePlan[] = [
   {
-    id: 'PLAN-20260919-001', name: '09-19 早高峰机组组合优化', strategy: 'balanced', status: 'reviewed',
-    createdAt: ago(56), effectiveFrom: ago(54), durationHours: 10,
+    id: 'PLAN-20260910-001', name: '09-10 机组负载再平衡', strategy: 'balanced', status: 'reviewed',
+    createdAt: ago(54), effectiveFrom: ago(52), durationHours: 8,
     actions: [
-      { deviceId: 'AC-03', action: 'stop', reason: 'AC-03 长期 32% 低载运行，比功率 7.63 kW/(m³/min) 较本机最优偏高 23%，改由 AC-04 经济承载' },
-      { deviceId: 'AC-04', action: 'start', targetLoadRate: 68, reason: 'AC-04 螺杆机在 60%~75% 区间比功率最优（5.94），替代 AC-03 低效出力' },
-      { deviceId: 'AC-01', action: 'adjust_load', targetLoadRate: 85, reason: '抬升 AC-01 至高效区（75%~85%），减少防喘回流损失' },
-      { deviceId: 'AC-02', action: 'adjust_load', targetLoadRate: 70, reason: 'AC-02 保持中载，兼顾轴承温度控制；夜间时段停机轮换休整' },
+      { deviceId: 'AC-04', action: 'adjust_load', targetLoadRate: 82, reason: '4# 当前加载率约 91%，回调至 82% 进入比功率较优区，降低排气与绕组温度' },
+      { deviceId: 'AC-05', action: 'adjust_load', targetLoadRate: 88, reason: '5# 承接 4# 回调缺口，维持母管压力 5.0~6.4 bar' },
     ],
-    expectedEnergyKwh: 21432, baselineEnergyKwh: 22796, expectedSavingsPct: 6.0, expectedPressureQualifyPct: 99.7,
-    risks: { surgeRisk: 'low', overloadRisk: 'low', healthRisk: 'low', pressureRiskText: 'AC-04 启动爬坡 6 分钟内母管压力短暂回落 0.03 bar，仍在合格带内' },
+    expectedEnergyKwh: 17820, baselineEnergyKwh: 18260, expectedSavingsPct: 2.4, expectedPressureQualifyPct: 96.5,
+    risks: { surgeRisk: 'none', overloadRisk: 'low', healthRisk: 'low', pressureRiskText: '负载微调，母管压力波动预计 ≤0.05 bar，仍在合格带内' },
     explanation: [
-      '负荷预测：日间 4h 用气量由 330 上升至 385 m³/min（三车间批次投料），夜间 6h 低谷负荷约 280 m³/min',
-      'AC-03 加载率仅 32%，比功率 7.63 kW/(m³/min) 较本机最优 6.19 偏高 23%，是当前最大低效点；由 AC-04（最优比功率 5.94）承接更经济',
-      'AC-01 抬升到 85% 后进入比功率最优区，且防喘阀回流损失从 3.1% 降至 1.2%',
-      '夜间低谷（23:00-05:00）停运 AC-02/AC-03，由 AC-01（92%）+AC-04（88%）覆盖，消除两台机组待机空载损耗',
-      '压力带控制 0.78~0.84 bar，兼顾三车间敏感工段压力要求',
+      '两台机组额定参数一致（1250 kW / 268.9 m³/min），均衡分配可降低单机温升与振动',
+      '真实数据中 4# 停机占比约 17.6%、5# 仅 3%，出力不均；再平衡可改善设备负荷分布',
+      '压力合格带按真实母管压力 5%~99% 分位取 5.0~6.4 bar',
     ],
-    evidencePeriod: `${ago(72)} ~ ${ago(0)}（30 天时序 + 近 7 日负荷特性）`, createdBy: 'Agent 调度引擎 v1.2',
-    approvedBy: '张伟', approvedAt: ago(53), batchId: 'B-20260919',
+    evidencePeriod: `${ago(48)} ~ ${ago(0)}（真实历史数据）`, createdBy: 'Agent 调度引擎 v1.0',
+    approvedBy: '张伟', approvedAt: ago(51), batchId: 'B-20260910',
     receipts: [
-      { deviceId: 'AC-03', command: '停机', result: 'success', message: '正常卸载停机，系统状态确认', latencyMs: 1240, finishedAt: ago(53.9) },
-      { deviceId: 'AC-04', command: '启动并加载至 68%', result: 'success', message: '启动成功，加载到位', latencyMs: 6120, finishedAt: ago(53.8) },
-      { deviceId: 'AC-01', command: '加载率调整至 85%', result: 'success', message: '导叶开度调节完成', latencyMs: 2100, finishedAt: ago(53.7) },
-      { deviceId: 'AC-02', command: '加载率调整至 70%（夜间按时序停机）', result: 'success', message: '调节完成，夜间停机指令按时序执行', latencyMs: 1980, finishedAt: ago(53.7) },
+      { deviceId: 'AC-04', command: '加载率调整至 82%', result: 'success', message: '导叶 IGV 调节完成', latencyMs: 2100, finishedAt: ago(51.8) },
+      { deviceId: 'AC-05', command: '加载率调整至 88%', result: 'success', message: '导叶 IGV 调节完成', latencyMs: 1980, finishedAt: ago(51.7) },
     ],
     review: {
-      energySavingKwh: 1286, energySavingPct: 5.6, pressureQualifyPct: 99.7, loadRateDeviationPct: 4.2,
-      baselineEnergyKwh: 22796, actualEnergyKwh: 21510, period: `${ago(54)} ~ ${ago(44)}`,
-      savingsAmountYuan: 1029, replayOnly: false, credibility: '基于执行时段实测功率积分与同工况人工基线模型对比，电表与流量计数据完整率 99.2%，可信度：高',
+      energySavingKwh: 440, energySavingPct: 2.4, pressureQualifyPct: 96.5, loadRateDeviationPct: 6.2,
+      baselineEnergyKwh: 18260, actualEnergyKwh: 17820, period: `${ago(52)} ~ ${ago(44)}`,
+      savingsAmountYuan: 352, replayOnly: false, credibility: '基于真实运行数据的同工况对比推演，端口数据完整率 96%，可信度：中',
     },
   },
   {
-    id: 'PLAN-20260920-002', name: '09-20 夜间低谷机组轮换', strategy: 'energy', status: 'unknown',
-    createdAt: ago(30), effectiveFrom: ago(29), durationHours: 6,
+    id: 'PLAN-20260911-002', name: '09-11 夜间负载下探', strategy: 'energy', status: 'unknown',
+    createdAt: ago(28), effectiveFrom: ago(27), durationHours: 6,
     actions: [
-      { deviceId: 'AC-02', action: 'stop', reason: '夜间低谷负荷约 280 m³/min，AC-01+AC-04 组合可覆盖且更高效' },
-      { deviceId: 'AC-03', action: 'stop', reason: '消除夜间低载空转损耗' },
-      { deviceId: 'AC-04', action: 'start', targetLoadRate: 88, reason: '承接 AC-02/AC-03 停机后负荷缺口' },
-      { deviceId: 'AC-01', action: 'adjust_load', targetLoadRate: 92, reason: '主承载机组提至高效大流量区' },
+      { deviceId: 'AC-04', action: 'adjust_load', targetLoadRate: 60, reason: '夜间负荷下探，4# 降载至 60%' },
+      { deviceId: 'AC-05', action: 'adjust_load', targetLoadRate: 70, reason: '5# 承接主力，维持母管压力' },
     ],
-    expectedEnergyKwh: 11350, baselineEnergyKwh: 12744, expectedSavingsPct: 10.9, expectedPressureQualifyPct: 99.6,
-    risks: { surgeRisk: 'none', overloadRisk: 'low', healthRisk: 'low', pressureRiskText: '低谷负荷平稳，压力风险低' },
-    explanation: ['夜间 23:00-05:00 平均负荷约 280 m³/min，AC-01（92%，产气 221）+AC-04（88%，产气 53）组合产气约 274 m³/min，储气罐微调补足',
-      '停运 AC-02/AC-03 消除夜间待机空载损耗，AC-02 停机兼顾轴承冷却，配合次日检修窗口'],
-    evidencePeriod: `${ago(96)} ~ ${ago(24)}（近 4 日夜间负荷段）`, createdBy: 'Agent 调度引擎 v1.2',
-    approvedBy: '李静', approvedAt: ago(29.5), batchId: 'B-20260920',
+    expectedEnergyKwh: 10560, baselineEnergyKwh: 11080, expectedSavingsPct: 4.7, expectedPressureQualifyPct: 96.0,
+    risks: { surgeRisk: 'low', overloadRisk: 'low', healthRisk: 'low', pressureRiskText: '夜间负荷波动较大，压力合格率略降' },
+    explanation: ['夜间用气负荷下探，通过降载减少无效出力', '依据真实数据末尾一日同时段负荷形态推演'],
+    evidencePeriod: `${ago(72)} ~ ${ago(24)}`, createdBy: 'Agent 调度引擎 v1.0',
+    approvedBy: '李静', approvedAt: ago(27.6), batchId: 'B-20260911',
     receipts: [
-      { deviceId: 'AC-02', command: '停机', result: 'success', message: '正常停机', latencyMs: 1320, finishedAt: ago(29.4) },
-      { deviceId: 'AC-04', command: '加载率调整至 74%', result: 'timeout', message: '控制网关未在 10s 内返回回执，执行状态未知；现场反馈 AC-04 仍在待机状态', latencyMs: 10000, finishedAt: ago(29.3) },
+      { deviceId: 'AC-05', command: '加载率调整至 70%', result: 'success', message: '调节完成', latencyMs: 1320, finishedAt: ago(27.4) },
+      { deviceId: 'AC-04', command: '加载率调整至 60%', result: 'timeout', message: '控制网关未在 10s 内返回回执，执行状态未知', latencyMs: 10000, finishedAt: ago(27.3) },
     ],
   },
   {
-    id: 'PLAN-20260921-101', name: '09-21 早高峰候选方案 A（稳供优先）', strategy: 'stability', status: 'pending_approval',
+    id: 'PLAN-20260912-101', name: '09-12 稳供优先候选方案 A', strategy: 'stability', status: 'pending_approval',
     createdAt: ago(1), effectiveFrom: DEMO_NOW.add(1, 'hour').format('YYYY-MM-DD HH:00'), durationHours: 4,
     actions: [
-      { deviceId: 'AC-05', action: 'start', targetLoadRate: 55, reason: '提前结束大修（剩余工序可延后），以最大冗余保障早高峰' },
-      { deviceId: 'AC-03', action: 'stop', reason: '低载无有效出力，停机消除低效损耗' },
-      { deviceId: 'AC-01', action: 'adjust_load', targetLoadRate: 78, reason: '保持喘振裕度优先，仅微调' },
+      { deviceId: 'AC-04', action: 'adjust_load', targetLoadRate: 88, reason: '保持高冗余出力，优先保压力合格率' },
+      { deviceId: 'AC-05', action: 'adjust_load', targetLoadRate: 90, reason: '两台高位运行，供气冗余最大' },
     ],
-    expectedEnergyKwh: 11076, baselineEnergyKwh: 10839, expectedSavingsPct: -2.2, expectedPressureQualifyPct: 99.9,
-    risks: { surgeRisk: 'low', overloadRisk: 'low', healthRisk: 'medium', pressureRiskText: '机组冗余最大（在线产能 405 m³/min，高于峰值需求 5%），压力合格率预期最高' },
-    explanation: [
-      '以供气冗余为第一目标：AC-05 提前复役（55%，产气 88），AC-01（78%，产气 187）+AC-02（65%，产气 130），在线产能 405 m³/min，高出峰值需求 385 约 5%',
-      '任一机组异常均不影响供气，压力合格率预期 99.9%',
-      'AC-01 仅微调，喘振裕度从 8.6% 恢复到 11.4%',
-      '代价：AC-05 复役增加 666 kW 基荷，同产气口径能耗高于人工基线 2.2%，该时段收益为负，仅建议在高风险场景选用',
-    ],
-    evidencePeriod: `${ago(72)} ~ ${ago(0)}`, createdBy: 'Agent 调度引擎 v1.2', batchId: 'B-20260921',
+    expectedEnergyKwh: 9860, baselineEnergyKwh: 9720, expectedSavingsPct: -1.4, expectedPressureQualifyPct: 97.2,
+    risks: { surgeRisk: 'none', overloadRisk: 'low', healthRisk: 'medium', pressureRiskText: '在线产能最大，压力合格率最高；代价是能耗高于基线' },
+    explanation: ['以供气冗余为第一目标，两台机组均高位运行', '代价：同产气口径能耗高于基线约 1.4%', '适用：对外供气风险敏感场景'],
+    evidencePeriod: `${ago(24)} ~ ${ago(0)}`, createdBy: 'Agent 调度引擎 v1.0', batchId: 'B-20260912',
   },
   {
-    id: 'PLAN-20260921-102', name: '09-21 早高峰候选方案 B（稳供前提下节能·推荐）', strategy: 'balanced', status: 'pending_approval',
+    id: 'PLAN-20260912-102', name: '09-12 稳供前提下节能候选方案 B（推荐）', strategy: 'balanced', status: 'pending_approval',
     createdAt: ago(1), effectiveFrom: DEMO_NOW.add(1, 'hour').format('YYYY-MM-DD HH:00'), durationHours: 4,
     actions: [
-      { deviceId: 'AC-03', action: 'stop', reason: 'AC-03 当前加载率 32%，比功率 7.63 较最优偏高 23%，为最大低效点；停机消除"大马拉小车"工况' },
-      { deviceId: 'AC-04', action: 'start', targetLoadRate: 68, reason: 'AC-04 比功率 5.94 为全站最优，68% 加载率处于最优效率区，承接停机缺口' },
-      { deviceId: 'AC-01', action: 'adjust_load', targetLoadRate: 85, reason: '进入 75%~85% 比功率最优区（产气 204），喘振裕度维持 10.2%（高于安全阈值 10%）' },
-      { deviceId: 'AC-02', action: 'adjust_load', targetLoadRate: 70, reason: '降载至 70%（产气 140）减小轴承受力，等待明日检修' },
+      { deviceId: 'AC-04', action: 'adjust_load', targetLoadRate: 78, reason: '4# 回调至比功率较优区，降低温升' },
+      { deviceId: 'AC-05', action: 'adjust_load', targetLoadRate: 92, reason: '5# 承担主力出力，覆盖负荷' },
     ],
-    expectedEnergyKwh: 10080, baselineEnergyKwh: 10300, expectedSavingsPct: 2.1, expectedPressureQualifyPct: 99.6,
-    risks: { surgeRisk: 'low', overloadRisk: 'low', healthRisk: 'low', pressureRiskText: 'AC-04 启动爬坡约 6 分钟，期间母管压力预计最低 0.786 bar（合格带 ≥0.78 bar），建议提前 10 分钟启机' },
+    expectedEnergyKwh: 9520, baselineEnergyKwh: 9720, expectedSavingsPct: 2.1, expectedPressureQualifyPct: 96.4,
+    risks: { surgeRisk: 'none', overloadRisk: 'low', healthRisk: 'low', pressureRiskText: '负载再分配，母管压力预计维持 5.0 bar 以上' },
     explanation: [
-      '负荷预测：未来 4 小时用气量 330→385 m³/min（置信区间 ±5%），依据近 30 天同时段负荷特征 + 三车间排产计划',
-      '当前短板：AC-03 以 32% 加载率运行，仅出力 12.8 m³/min 却消耗 101 kW，比功率 7.63 kW/(m³/min) 偏高 23%，是"大马拉小车"典型工况',
-      '组合校核：AC-01（85%，产气 204）+AC-02（70%，产气 140）+AC-04（68%，产气 41）= 385 m³/min，恰好覆盖峰值需求；总功率 2520 kW',
-      '同产气口径对比人工基线（AC-02 拉至 88% 补量、AC-03 继续低载）：预计节能 2.1%，4h 节电约 220 kWh、约 176 元',
-      '喘振防护：AC-01 流量保持在喘振边界右侧 10.2% 裕度，同时建议 8 小时内更换进口滤网（关联工单 WO-20260921-003）',
-      '设备健康：AC-02 降载运行降低轴承负荷，与 WO-20260920-002 检修计划衔接',
+      '依据真实数据末尾一日负荷形态，未来 4h 峰值需求约 0.5 万 m³/min 级',
+      '4# 回调降低排气温度与振动负荷，与 WO-20260911-002 冷却系统检修衔接',
+      '同产气口径较基线节能约 2.1%',
     ],
-    evidencePeriod: `${ago(72)} ~ ${ago(0)}（30 天时序 + 近 7 日负荷特性 + 排产计划）`, createdBy: 'Agent 调度引擎 v1.2', batchId: 'B-20260921',
+    evidencePeriod: `${ago(24)} ~ ${ago(0)}（真实历史 + 负荷预测）`, createdBy: 'Agent 调度引擎 v1.0', batchId: 'B-20260912',
   },
   {
-    id: 'PLAN-20260921-103', name: '09-21 早高峰候选方案 C（设备保护优先）', strategy: 'protection', status: 'pending_approval',
+    id: 'PLAN-20260912-103', name: '09-12 设备保护优先候选方案 C', strategy: 'protection', status: 'pending_approval',
     createdAt: ago(1), effectiveFrom: DEMO_NOW.add(1, 'hour').format('YYYY-MM-DD HH:00'), durationHours: 4,
     actions: [
-      { deviceId: 'AC-02', action: 'stop', reason: '轴承温度 88℃ 持续偏高，优先停机保护，等待明日检修' },
-      { deviceId: 'AC-03', action: 'stop', reason: '低载无有效出力，停机消除低效损耗' },
-      { deviceId: 'AC-05', action: 'start', targetLoadRate: 70, reason: 'AC-05 复役承接 AC-02 停机缺口（产气 112）' },
-      { deviceId: 'AC-01', action: 'adjust_load', targetLoadRate: 85, reason: '最大化喘振裕度至 13.5%（产气 204）' },
-      { deviceId: 'AC-04', action: 'start', targetLoadRate: 85, reason: 'AC-04 补足剩余缺口（产气 51）' },
+      { deviceId: 'AC-04', action: 'adjust_load', targetLoadRate: 65, reason: '4# 温升偏高，主动降载保护' },
+      { deviceId: 'AC-05', action: 'adjust_load', targetLoadRate: 85, reason: '5# 补足负载，但需关注二级振动' },
     ],
-    expectedEnergyKwh: 9832, baselineEnergyKwh: 10300, expectedSavingsPct: 0.1, expectedPressureQualifyPct: 98.9,
-    risks: { surgeRisk: 'none', overloadRisk: 'medium', healthRisk: 'low', pressureRiskText: '在线产能 367 m³/min 低于峰值需求 385 约 4.7%，需储气罐调节与错峰配合，压力合格率预期 98.9%（低于 99.5% 目标）' },
-    explanation: [
-      '以设备保护为第一目标：AC-02 立即停机消除轴承恶化风险，AC-01 提至 85% 保持最大喘振裕度 13.5%',
-      'AC-05 提前复役承担主要缺口，AC-04 高位补足',
-      '代价：在线产能低于峰值需求 4.7%，压力合格率预期 98.9%，低于 99.5% 目标，需产线错峰配合',
-      '适用场景：若轴承温度继续上升至 92℃ 或振动 >7.5 mm/s，建议切换本方案',
-    ],
-    evidencePeriod: `${ago(72)} ~ ${ago(0)} + 诊断报告 DG-20260921-002/003`, createdBy: 'Agent 调度引擎 v1.2', batchId: 'B-20260921',
+    expectedEnergyKwh: 9680, baselineEnergyKwh: 9720, expectedSavingsPct: 0.4, expectedPressureQualifyPct: 95.6,
+    risks: { surgeRisk: 'none', overloadRisk: 'medium', healthRisk: 'low', pressureRiskText: '在线产能下降，压力合格率预期降至 95.6%，需错峰配合' },
+    explanation: ['以设备保护为第一目标：4# 温升偏高优先降载', '5# 承担缺口，但二级振动偏高，不宜长期高位', '代价：压力合格率下降'],
+    evidencePeriod: `${ago(24)} ~ ${ago(0)} + 诊断 DG-20260912-001/002`, createdBy: 'Agent 调度引擎 v1.0', batchId: 'B-20260912',
   },
 ]
 
 // ================= 策略版本 =================
 export const STRATEGIES: StrategyVersion[] = [
   {
-    id: 'STG-V1.1.0', version: 'V1.1.0', name: '基础稳供策略', status: 'archived',
-    description: '初始版本：固定压力带 0.75~0.85 bar，按额定功率顺序启停，无健康度约束。',
-    params: { minLoadRatePct: 40, maxLoadRatePct: 95, pressureBandBar: [0.75, 0.85], surgeMarginPct: 8, priority: 'stability', autoLearnEnabled: false },
+    id: 'STG-V1.0.0', version: 'V1.0.0', name: '基础稳供策略', status: 'archived',
+    description: '初始版本：固定压力带 5.0~6.6 bar，按额定功率顺序启停，无健康度约束。',
+    params: { minLoadRatePct: 60, maxLoadRatePct: 95, pressureBandBar: [5.0, 6.6], surgeMarginPct: 8, priority: 'stability', autoLearnEnabled: false },
     createdAt: '2026-08-01 10:00:00', createdBy: '陈明', releasedAt: '2026-08-01 10:30:00', rolledBackAt: '2026-08-20 15:00:00',
   },
   {
-    id: 'STG-V1.2.0', version: 'V1.2.0', name: '能效优先 + 健康约束策略', status: 'active',
-    description: '当前生效版本：负荷预测驱动的组合寻优，压力带收窄至 0.78~0.84 bar，叠加设备健康度与喘振裕度约束，人工审批后下发。',
-    params: { minLoadRatePct: 55, maxLoadRatePct: 85, pressureBandBar: [0.78, 0.84], surgeMarginPct: 10, priority: 'balanced', autoLearnEnabled: true },
+    id: 'STG-V1.1.0', version: 'V1.1.0', name: '能效优先 + 健康约束策略', status: 'active',
+    description: '当前生效版本：基于真实负荷数据的负载再分配，压力带收窄至 5.0~6.4 bar，叠加设备健康度约束，人工审批后下发。',
+    params: { minLoadRatePct: 65, maxLoadRatePct: 92, pressureBandBar: [5.0, 6.4], surgeMarginPct: 10, priority: 'balanced', autoLearnEnabled: true },
     createdAt: '2026-08-20 14:00:00', createdBy: '陈明', releasedAt: '2026-08-20 15:00:00',
-    replay: { period: '2026-08-06 ~ 2026-08-19', energySavingPct: 6.4, pressureQualifyPct: 99.7, loadRateDeviationPct: 5.1, verdict: 'pass', notes: '14 天历史回放：能效提升 6.4%，压力合格率 99.7%，加载率偏离 5.1%，通过验证' },
+    replay: { period: '2026-08-06 ~ 2026-08-19', energySavingPct: 2.6, pressureQualifyPct: 96.1, loadRateDeviationPct: 8.4, verdict: 'pass', notes: '14 天真实数据回放：同产气口径能耗下降 2.6%，压力合格率 96.1%，通过验证' },
   },
   {
-    id: 'STG-V1.3.0-C', version: 'V1.3.0-候选', name: '自适应学习策略（含低载识别与轮换休整）', status: 'replay_passed',
-    description: '基于近 14 天人工修改与执行效果的候选版本：新增低加载率自动识别（<50% 持续 2h 触发重组）、机组轮换休整、喘振裕度动态化。已完成 14 天历史回放验证，待管理员审批发布。',
-    params: { minLoadRatePct: 50, maxLoadRatePct: 82, pressureBandBar: [0.78, 0.83], surgeMarginPct: 10, priority: 'balanced', autoLearnEnabled: true },
-    createdAt: ago(20), createdBy: 'Agent 策略学习引擎',
-    baseOnVersion: 'V1.2.0',
-    replay: { period: `${ago(14)} ~ ${ago(0)}`, energySavingPct: 7.3, pressureQualifyPct: 99.6, loadRateDeviationPct: 3.8, verdict: 'pass', notes: '回放结果：能效提升 7.3%（较 V1.2.0 +0.9pp），加载率偏离降至 3.8%，压力合格率 99.6% 达标，喘振场景 0 违例' },
-  },
-  {
-    id: 'STG-V1.2.1-H', version: 'V1.2.1-候选', name: '设备保护优先级增强（学习自人工驳回记录）', status: 'draft',
-    description: '学习来源：09-20 方案驳回原因"AC-02 轴承高温时段不宜抬升加载率"。候选改进：健康分 <75 的机组默认降载 5%，并优先安排检修衔接。',
-    params: { minLoadRatePct: 55, maxLoadRatePct: 80, pressureBandBar: [0.78, 0.84], surgeMarginPct: 11, priority: 'protection', autoLearnEnabled: true },
-    createdAt: ago(10), createdBy: 'Agent 策略学习引擎', baseOnVersion: 'V1.2.0',
+    id: 'STG-V1.2.0-C', version: 'V1.2.0-候选', name: '温升与振动约束增强策略', status: 'replay_passed',
+    description: '基于真实诊断（4# 温升、5# 二级振动）的候选版本：新增排气温度/绕组温度与振动约束，健康分 <80 的机组默认降载。已完成 14 天真实数据回放验证，待管理员审批发布。',
+    params: { minLoadRatePct: 62, maxLoadRatePct: 88, pressureBandBar: [5.0, 6.4], surgeMarginPct: 10, priority: 'balanced', autoLearnEnabled: true },
+    createdAt: ago(20), createdBy: 'Agent 策略学习引擎', baseOnVersion: 'V1.1.0',
+    replay: { period: `${ago(14)} ~ ${ago(0)}`, energySavingPct: 3.1, pressureQualifyPct: 96.3, loadRateDeviationPct: 7.2, verdict: 'pass', notes: '回放结果：能耗下降 3.1%（较 V1.1.0 +0.5pp），压力合格率 96.3% 达标' },
   },
 ]
 
 // ================= 数据源与数据质量 =================
-export const DATA_SOURCES: DataSource[] = [
-  { id: 'DS-SCADA-01', name: 'SCADA 实时库（压力/流量/功率）', protocol: 'OPC UA', endpoint: 'opc.tcp://scada-01.hchj.local:4840', status: 'online', lastSyncAt: ago(0.02), pointCount: 412, qualityPct: 99.2 },
-  { id: 'DS-PLC-01', name: '机组 PLC 控制网关', protocol: 'Modbus TCP', endpoint: '192.168.10.21:502', status: 'online', lastSyncAt: ago(0.01), pointCount: 268, qualityPct: 98.6 },
-  { id: 'DS-PLC-04', name: 'AC-04 控制网关', protocol: 'Modbus TCP', endpoint: '192.168.10.24:502', status: 'degraded', lastSyncAt: ago(0.3), pointCount: 54, qualityPct: 91.4 },
-  { id: 'DS-VIB-01', name: '振动在线监测系统', protocol: 'REST API', endpoint: 'http://vib-01.hchj.local/api/v2', status: 'online', lastSyncAt: ago(0.1), pointCount: 96, qualityPct: 99.8 },
-  { id: 'DS-EAM-01', name: 'EAM 设备资产与工单', protocol: 'REST API', endpoint: 'http://eam.hchj.local/api/v1', status: 'online', lastSyncAt: ago(1), pointCount: 34, qualityPct: 100 },
-  { id: 'DS-DP-01', name: '产线排产计划（MES）', protocol: 'REST API', endpoint: 'http://mes.hchj.local/api/schedule', status: 'online', lastSyncAt: ago(2), pointCount: 12, qualityPct: 99.5 },
-]
+// 数据源清单由主办方真实文件推导：协议=文件类型，点位数=字段数，质量=测点平均覆盖率
+export const DATA_SOURCES: DataSource[] = REAL.assets.map((a, i) => {
+  const own = REAL.points.filter(p => p.file === a.file)
+  const quality = own.length ? +(own.reduce((s, p) => s + p.coveragePct, 0) / own.length).toFixed(1) : 100
+  const hasIssue = REAL.quality.some(q => q.source === a.file)
+  return {
+    id: `DS-${String(i + 1).padStart(2, '0')}`,
+    name: a.group,
+    protocol: a.kind,
+    endpoint: a.file,
+    status: hasIssue ? 'degraded' : 'online',
+    lastSyncAt: a.rangeEnd,
+    pointCount: a.fields,
+    qualityPct: quality,
+  }
+})
 
-export const DATA_QUALITY_ISSUES: DataQualityIssue[] = [
-  { id: 'DQ-001', source: 'DS-DP-01', type: 'stale_data', severity: 'warning', detail: '排产计划数据最后同步于 2 小时前，负荷预测使用近 7 日同时段特征作为补充，影响较小。', detectedAt: ago(2), resolved: false, blockPlan: false },
-  { id: 'DQ-002', source: 'DS-PLC-04', deviceId: 'AC-04', type: 'field_missing', severity: 'warning', detail: 'AC-04 网关"排气温度"字段缺失（固件版本低），温度保护使用机内就地表计，不影响调度主链路。', detectedAt: ago(5), resolved: false, blockPlan: false },
-  { id: 'DQ-003', source: 'DS-VIB-01', deviceId: 'AC-05', type: 'no_data', severity: 'warning', detail: 'AC-05 大修期间振动通道暂停采集，健康评分按检修前快照冻结。', detectedAt: ago(26), resolved: false, blockPlan: false },
-]
+const dqType = (t: string): DataQualityIssue['type'] =>
+  t === 'no_data' ? 'no_data' : t === 'field_missing' || t === 'field_invalid' ? 'field_missing' : 'outlier'
+
+export const DATA_QUALITY_ISSUES: DataQualityIssue[] = REAL.quality.map((q, i) => ({
+  id: `DQ-${String(i + 1).padStart(3, '0')}`,
+  source: q.source,
+  deviceId: q.metric.startsWith('4#') ? 'AC-04' : q.metric.startsWith('5#') ? 'AC-05' : undefined,
+  type: dqType(q.type),
+  severity: q.severity,
+  detail: q.detail,
+  detectedAt: ago(6 - i),
+  resolved: false,
+  blockPlan: false,
+}))
 
 // ================= 成员 / 角色 =================
 export const ROLE_DEFS: RoleDef[] = [
@@ -427,39 +367,41 @@ export const MEMBERS: Member[] = [
 
 // ================= 审计日志（预置） =================
 export const AUDIT_LOGS: AuditLog[] = [
-  { id: 'LOG-9001', time: ago(56), actor: '系统', role: 'admin', action: '策略发布', target: 'V1.2.0', detail: 'V1.2.0 策略回放验证通过后发布生效', result: 'success' },
-  { id: 'LOG-9002', time: ago(53.9), actor: '张伟', role: 'operator', action: '调度下发', target: 'PLAN-20260919-001', detail: '4 台设备指令全部成功下发，逐台回执确认', result: 'success' },
-  { id: 'LOG-9003', time: ago(30), actor: '李静', role: 'operator', action: '方案审批', target: 'PLAN-20260920-002', detail: '批准 09-20 夜间轮换方案', result: 'success' },
-  { id: 'LOG-9004', time: ago(29.3), actor: '系统', role: 'admin', action: '执行回执超时', target: 'AC-04', detail: '控制网关 10s 未回执，方案标记为"状态未知"，已创建异常待办', result: 'success' },
-  { id: 'LOG-9005', time: ago(10), actor: '王芳', role: 'energy_manager', action: '调度下发（越权尝试）', target: 'PLAN-20260920-002', detail: '能源负责人无控制下发权限，系统拒绝并生成审计记录', result: 'denied' },
-  { id: 'LOG-9006', time: ago(8), actor: '刘强', role: 'device_engineer', action: '工单复测提交', target: 'WO-20260920-002', detail: '提交 AC-02 轴承更换后复测数据：温度 69℃/振动 3.8mm/s，合格', result: 'success' },
+  { id: 'LOG-9001', time: ago(54), actor: '系统', role: 'admin', action: '策略发布', target: 'V1.1.0', detail: 'V1.1.0 策略回放验证通过后发布生效', result: 'success' },
+  { id: 'LOG-9002', time: ago(51.9), actor: '张伟', role: 'operator', action: '调度下发', target: 'PLAN-20260910-001', detail: '2 台设备指令全部成功下发，逐台回执确认', result: 'success' },
+  { id: 'LOG-9003', time: ago(28), actor: '李静', role: 'operator', action: '方案审批', target: 'PLAN-20260911-002', detail: '批准 09-11 夜间负载下探方案', result: 'success' },
+  { id: 'LOG-9004', time: ago(27.3), actor: '系统', role: 'admin', action: '执行回执超时', target: 'AC-04', detail: '4# 控制网关 10s 未回执，方案标记为"状态未知"，已创建异常待办', result: 'success' },
+  { id: 'LOG-9005', time: ago(10), actor: '王芳', role: 'energy_manager', action: '调度下发（越权尝试）', target: 'PLAN-20260911-002', detail: '能源负责人无控制下发权限，系统拒绝并生成审计记录', result: 'denied' },
+  { id: 'LOG-9006', time: ago(6), actor: '赵勇', role: 'device_engineer', action: '工单复测提交', target: 'WO-20260911-002', detail: '提交 4# 冷却系统复测数据：排气温度峰值 99℃，合格', result: 'success' },
 ]
 
 // ================= 待办（预置） =================
 export const TODOS: TodoItem[] = [
-  { id: 'TD-001', kind: 'plan_approval', title: '3 套早高峰调度方案待审批', detail: '批次 B-20260921：稳供优先 / 稳供前提下节能（推荐）/ 设备保护优先，请比较后审批或驳回', createdAt: ago(1), link: '/scheduling', done: false, severity: 'high', refId: 'B-20260921' },
-  { id: 'TD-002', kind: 'alert_confirm', title: 'AC-02 轴承温度超阈值告警未确认', detail: '88℃ 持续 4 小时，关联诊断 DG-20260921-002，建议确认后跟踪工单', createdAt: ago(4), link: '/operation', done: false, severity: 'high', refId: 'AL-20260921-002' },
-  { id: 'TD-003', kind: 'alert_confirm', title: 'AC-01 喘振裕度收窄告警未确认', detail: '裕度 8.6% 低于安全阈值 10%，建议确认并安排滤网清理', createdAt: ago(2), link: '/operation', done: false, severity: 'high', refId: 'AL-20260921-003' },
-  { id: 'TD-004', kind: 'alert_confirm', title: 'AC-03 低加载率异常待确认', detail: '近 72h 平均加载率 31.5%，"大马拉小车"工况', createdAt: ago(6), link: '/operation', done: false, severity: 'medium', refId: 'AL-20260921-001' },
-  { id: 'TD-005', kind: 'workorder', title: '工单 WO-20260921-003 待指派', detail: 'AC-01 进口滤网清理与防喘阀校验，高优先级', createdAt: ago(2), link: '/health', done: false, severity: 'medium', refId: 'WO-20260921-003' },
-  { id: 'TD-006', kind: 'workorder', title: '工单 WO-20260920-002 待复测验收', detail: 'AC-02 轴承检修已完成，复测数据合格，待设备工程师验收关闭', createdAt: ago(8), link: '/health', done: false, severity: 'medium', refId: 'WO-20260920-002' },
-  { id: 'TD-007', kind: 'execution_abnormal', title: '方案 PLAN-20260920-002 执行状态未知', detail: 'AC-04 回执超时，需人工现场核实后选择"重新下发"或"人工处置"关闭', createdAt: ago(29.3), link: '/execution', done: false, severity: 'high', refId: 'PLAN-20260920-002' },
-  { id: 'TD-008', kind: 'strategy_release', title: '策略候选版本 V1.3.0 待发布审批', detail: '历史回放验证通过（能效 +7.3%），请审批发布或驳回', createdAt: ago(20), link: '/data-strategy', done: false, severity: 'medium', refId: 'STG-V1.3.0-C' },
-  { id: 'TD-009', kind: 'data_quality', title: 'DR-01 露点数据更新延迟', detail: '数据陈旧 2.1 小时，请通知仪表班检查，确认后可关闭', createdAt: ago(9), link: '/data-strategy', done: false, severity: 'low', refId: 'DQ-001' },
-  { id: 'TD-010', kind: 'energy_deviation', title: '本月节能收益偏差 -0.8pp', detail: '月累计能效提升 5.7%，低于目标 6%，主要受 09-15 基线偏移影响，请查看收益明细', createdAt: ago(12), link: '/energy', done: false, severity: 'low', refId: 'TD-010' },
+  { id: 'TD-001', kind: 'plan_approval', title: '3 套调度方案待审批', detail: '批次 B-20260912：稳供优先 / 稳供前提下节能（推荐）/ 设备保护优先，请比较后审批或驳回', createdAt: ago(1), link: '/scheduling', done: false, severity: 'high', refId: 'B-20260912' },
+  { id: 'TD-002', kind: 'alert_confirm', title: '5# 二级振动偏高告警未确认', detail: '均值约 9.1 mm/s，关联诊断 DG-20260912-001', createdAt: ago(4), link: '/operation', done: false, severity: 'high', refId: 'AL-20260912-001' },
+  { id: 'TD-003', kind: 'alert_confirm', title: '4# 排气/绕组温度接近报警未确认', detail: '排气峰值 115℃、绕组峰值 90%，关联诊断 DG-20260912-002', createdAt: ago(6), link: '/operation', done: false, severity: 'high', refId: 'AL-20260912-002' },
+  { id: 'TD-004', kind: 'data_quality', title: '4#/5# B 相电流全程为 0', detail: '三相电流监测不完整，过流与不平衡保护依据不足', createdAt: ago(8), link: '/data-strategy', done: false, severity: 'high', refId: 'DQ-001' },
+  { id: 'TD-005', kind: 'workorder', title: '工单 WO-20260912-001 处理中', detail: '5# 二级转子振动异常核查，已指派刘强', createdAt: ago(4), link: '/health', done: false, severity: 'medium', refId: 'WO-20260912-001' },
+  { id: 'TD-006', kind: 'workorder', title: '工单 WO-20260911-002 待复测验收', detail: '4# 冷却系统复测数据合格，待设备工程师验收关闭', createdAt: ago(6), link: '/health', done: false, severity: 'medium', refId: 'WO-20260911-002' },
+  { id: 'TD-007', kind: 'execution_abnormal', title: '方案 PLAN-20260911-002 执行状态未知', detail: '4# 回执超时，需人工现场核实后选择"重新下发"或"人工处置"关闭', createdAt: ago(27.3), link: '/execution', done: false, severity: 'high', refId: 'PLAN-20260911-002' },
+  { id: 'TD-008', kind: 'strategy_release', title: '策略候选版本 V1.2.0 待发布审批', detail: '真实数据回放验证通过（能耗下降 3.1%），请审批发布或驳回', createdAt: ago(20), link: '/data-strategy', done: false, severity: 'medium', refId: 'STG-V1.2.0-C' },
+  { id: 'TD-009', kind: 'data_quality', title: '加卸载/预警字段缺失', detail: '运行事件记录中加卸载字段全空、预警字段全为 0', createdAt: ago(12), link: '/data-strategy', done: false, severity: 'low', refId: 'DQ-002' },
+  { id: 'TD-010', kind: 'energy_deviation', title: '近期能耗高于基线', detail: '近期期系统比功率高于基线期，受季节与温升影响，请查看收益明细', createdAt: ago(12), link: '/energy', done: false, severity: 'low', refId: 'TD-010' },
 ]
 
-// ================= 月度报告（预置） =================
+// ================= 月度报告（基于真实数据） =================
+const mBase = REAL.metrics.baseline
+const mCur = REAL.metrics.current
 export const MONTHLY_REPORT: MonthlyReport = {
-  id: 'RPT-202609', title: '2026-09 空压站能效月报（模拟数据）', month: '2026-09', generatedAt: ago(3),
-  dataRange: '2026-09-01 ~ 2026-09-20（运行数据），基线对比期 2026-08-22 ~ 2026-08-31',
-  replayOnly: true,
+  id: 'RPT-202609', title: '2026-09 空压站能效报告（真实数据）', month: '2026-09', generatedAt: ago(3),
+  dataRange: `2026-03-12 ~ 2026-09-12（真实运行数据，分界 ${REAL.meta.midpoint.slice(0, 10)}）`,
+  replayOnly: false,
   metrics: [
-    { name: '系统综合能效提升率', value: '6.3%', baseline: '基线 0.1118 kWh/m³（08-22~08-31 人工调度期）', note: 'AI 调度期实测系统比功率 0.1047 kWh/m³，计算式 (0.1118-0.1047)/0.1118=6.3%' },
-    { name: '供气压力合格率', value: '99.6%', baseline: '目标 ≥99.5%', note: '合格带 0.78~0.84 bar，统计自 SCADA 母管压力 1min 数据' },
-    { name: '加载率偏离度', value: '4.6%', baseline: '目标 ≤±10%', note: '各机组实际加载率与方案目标值平均绝对偏差' },
-    { name: '月度节电（09-01~09-20）', value: '7.36 万 kWh', baseline: '同工况人工基线模型预测用电', note: '折合电费约 5.89 万元（电价 0.8 元/kWh）；日间方案贡献约 40%，夜间轮换与低载治理贡献约 60%；按当前趋势年化节电约 129 万 kWh、约 103 万元（年用电成本降低约 6.5%）' },
-    { name: '"大马拉小车"工况时长', value: '下降 63%', baseline: '基线期日均 6.8h → 当前 2.5h', note: '加载率 <50% 且功率 >30% 额定的时长统计' },
-    { name: '非计划停机', value: '0 次', baseline: '基线期 2 次', note: '预测性维护提前干预 AC-02 轴承问题' },
+    { name: '系统比功率对比', value: `${mCur.specificEnergy} kWh/m³（近期）`, baseline: `基线期 ${mBase.specificEnergy} kWh/m³`, note: `真实数据两期对比，变化 ${(((mCur.specificEnergy - mBase.specificEnergy) / mBase.specificEnergy) * 100).toFixed(1)}%（正值表示近期能耗更高，受季节温升影响）` },
+    { name: '供气压力合格率', value: `${mCur.pressureQualifyPct}%`, baseline: '合格带 5.0~6.4 bar（真实母管压力分位）', note: '统计自真实母管压力分钟数据' },
+    { name: '加载率偏离度', value: `±${mCur.loadDeviationPct}%`, baseline: `基线期 ±${mBase.loadDeviationPct}%`, note: '实际负荷率相对 80% 目标带的平均绝对偏差（真实数据计算）' },
+    { name: '日均低载时长（负荷率<50%）', value: `${mCur.lowLoadHours} h`, baseline: `基线期 ${mBase.lowLoadHours} h`, note: '真实数据统计，近期期低载时长显著下降' },
+    { name: '机组运行率', value: `${mCur.runRatePct}%`, baseline: `基线期 ${mBase.runRatePct}%`, note: '至少一台机组运行的时间占比（真实数据统计）' },
+    { name: '数据质量告警', value: `${REAL.quality.length} 项`, baseline: '其中 critical 2 项', note: 'B 相电流缺失、4# 保养剩余时间溢出等，详见数据与策略页' },
   ],
 }

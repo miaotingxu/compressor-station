@@ -121,7 +121,7 @@ export default function AssistantPage() {
             <div style={{ padding: 12, borderTop: '1px solid #eef1f6', background: '#fff' }}>
               <Space.Compact style={{ width: '100%' }}>
                 <Input
-                  placeholder="例如：未来两小时的最优开机组合是什么？为什么建议停掉 AC-03？"
+                  placeholder="例如：未来两小时的最优开机组合是什么？为什么 5# 二级振动偏高？"
                   value={input} onChange={e => setInput(e.target.value)}
                   onPressEnter={() => send()}
                   disabled={thinking}
@@ -214,7 +214,7 @@ function StructuredBlock({ m, onNav, onConvert }: { m: ChatMessage; onNav: (p: s
         ) : (
           <Button size="small" icon={<CheckOutlined />} onClick={() => onNav('/scheduling')}>采纳建议</Button>
         )}
-        <Button size="small" icon={<FileSearchOutlined />} onClick={() => onNav(s.devices.includes('AC-01') && s.risks.some(r => r.includes('喘振')) ? '/health' : s.evidence.some(e => e.includes('工单')) ? '/health' : '/operation')}>查看依据</Button>
+        <Button size="small" icon={<FileSearchOutlined />} onClick={() => onNav(s.devices.includes('AC-05') && s.risks.some(r => r.includes('振')) ? '/health' : s.evidence.some(e => e.includes('工单')) ? '/health' : '/operation')}>查看依据</Button>
         <Button size="small" onClick={() => onNav('/scheduling')}>继续追问</Button>
       </Space>
     </div>

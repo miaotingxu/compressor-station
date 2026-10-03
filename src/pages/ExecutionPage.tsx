@@ -141,7 +141,7 @@ export default function ExecutionPage() {
               `复盘时段：${p.review.period}（实际功率积分 vs 同工况人工基线模型推演）`,
               `执行设备：${p.receipts?.map(r => r.deviceId).join('、') ?? '—'}，全部回执成功`,
               `可信度：${p.review.credibility}`,
-              p.review.replayOnly ? '口径：模拟回放结果' : '口径：实测 + 基线对比（模拟数据演示）',
+              p.review.replayOnly ? '口径：回放结果' : '口径：真实数据前后半程对比',
               '关联：能效与收益页可查看该方案对月度指标的贡献',
             ]} />
           </div>

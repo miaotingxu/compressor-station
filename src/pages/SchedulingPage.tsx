@@ -107,7 +107,7 @@ export default function SchedulingPage() {
       {simulateSurgeBlock && (
         <Alert
           style={{ marginBottom: 12 }} type="error" showIcon
-          message="安全拦截生效中：AC-01 喘振裕度 8.6% 低于安全阈值 10%（高风险）"
+          message="安全拦截生效中：5# 二级振动偏高，已按高风险场景阻断调度下发"
           description="按核心安全规则，出现高风险喘振时阻断调度下发并进入应急处置。已批准方案的下发将被拒绝，请先在「设备健康」页处理喘振风险（工单 WO-20260921-003）。"
           action={<Button size="small" danger onClick={() => nav('/health')}>去处理喘振风险</Button>}
         />
@@ -122,7 +122,7 @@ export default function SchedulingPage() {
           >
             <LoadForecastChart />
             <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)', marginTop: 6 }}>
-              预测依据：近 30 天同时段负荷特征 + 三车间排产计划（MES）+ 天气/班次修正。置信区间 ±5%。当前在线产能与预测峰值的缺口，将由方案自动校核补足。
+              预测依据：真实数据末端分时负荷形态外推。置信区间 ±5%。当前在线产能与预测峰值的缺口，将由方案自动校核补足。
             </div>
           </Card>
         </Col>
@@ -130,7 +130,7 @@ export default function SchedulingPage() {
           <Card size="small" title={<Space><RobotOutlined /> 方案生成</Space>}>
             <Space direction="vertical" size={8} style={{ width: '%' }}>
               <div style={{ fontSize: 12.5, color: 'rgba(0,0,0,0.6)' }}>
-                引擎：Agent 调度引擎（策略 V1.2.0 生效中）· 约束：加载率 55%~85%、压力带 0.78~0.84 bar、喘振裕度 ≥10%
+                引擎：Agent 调度引擎（策略生效中）· 约束：加载率 65%~92%、压力带 5.0~6.4 bar、喘振裕度 ≥10%
               </div>
               <div>
                 {STRATEGY_INTRO.map(s => (
@@ -241,7 +241,7 @@ export default function SchedulingPage() {
         }}
       >
         <Alert type="info" showIcon style={{ marginBottom: 10 }}
-          message="驳回原因会进入策略学习记录" description="系统将基于驳回原因（如“AC-02 轴承高温时段不宜抬升加载率”）自动生成策略候选版本的改进项，供管理员审批。" />
+          message="驳回原因会进入策略学习记录" description="系统将基于驳回原因（如“4# 温升偏高时段不宜持续高加载率”）自动生成策略候选版本的改进项，供管理员审批。" />
         <Input.TextArea rows={4} value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="请填写驳回原因（必填，至少 10 字）……" />
       </Modal>
 
@@ -338,7 +338,7 @@ function PlanDetailCard({ plan: p, canApprove, onApprove, onReject, onEdit }: {
               {p.actions.map(a => <div key={a.deviceId + a.action} style={{ fontSize: 12.5 }}>{actionText(a)} —— <span style={{ color: 'rgba(0,0,0,0.55)' }}>{a.reason}</span></div>)}
             </Descriptions.Item>
             <Descriptions.Item label="生效时间">{dayjs(p.effectiveFrom).format('MM-DD HH:mm')} 起 · 持续 {p.durationHours}h</Descriptions.Item>
-            <Descriptions.Item label="压力设定">母管压力带 0.78~0.84 bar（策略约束）</Descriptions.Item>
+            <Descriptions.Item label="压力设定">母管压力带 5.0~6.4 bar（策略约束）</Descriptions.Item>
             <Descriptions.Item label="预计节能"><span style={{ color: p.expectedSavingsPct > 0 ? '#52c41a' : '#ff4d4f', fontWeight: 600 }}>{p.expectedSavingsPct > 0 ? `${p.expectedSavingsPct}%（约 ${Math.round((p.baselineEnergyKwh - p.expectedEnergyKwh) * 0.8)} 元）` : `能耗 +${Math.abs(p.expectedSavingsPct)}%`}</span></Descriptions.Item>
             <Descriptions.Item label="压力合格率预期"><span style={{ color: p.expectedPressureQualifyPct >= 99.5 ? '#52c41a' : '#ff4d4f' }}>{p.expectedPressureQualifyPct}%</span></Descriptions.Item>
             <Descriptions.Item label="预计能耗">{p.expectedEnergyKwh.toLocaleString()} kWh / 基线 {p.baselineEnergyKwh.toLocaleString()} kWh</Descriptions.Item>

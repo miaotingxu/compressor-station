@@ -6,7 +6,7 @@ import {
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../store/appStore'
-import { AI_METRICS } from '../data/timeseries'
+import { AI_METRICS, BASELINE_METRICS } from '../data/timeseries'
 import { LOAD_FORECAST } from '../data/timeseries'
 import { DemoTag, SectionTitle } from '../components/common'
 import { ROLE_DEFS } from '../data/initial'
@@ -25,7 +25,7 @@ const KIND_META: Record<string, { label: string; icon: React.ReactNode; color: s
 
 export default function DashboardPage() {
   const nav = useNavigate()
-  const { todos, me, roleOf, currentRole, devices, resolveTodo } = useApp()
+  const { todos, me, roleOf, currentRole, devices, resolveTodo, dataTime } = useApp()
   const [showHistory, setShowHistory] = useState(false)
   const [noteOpen, setNoteOpen] = useState<string | null>(null)
   const [noteText, setNoteText] = useState('')
@@ -39,6 +39,7 @@ export default function DashboardPage() {
   const totalPower = Math.round(running.reduce((s, d) => s + d.powerKw, 0))
   const totalFlow = Math.round(running.reduce((s, d) => s + d.flowM3Min, 0))
   const peak = Math.max(...LOAD_FORECAST.map(p => p.forecastM3Min))
+  const energyDelta = +(((AI_METRICS.specificEnergy - BASELINE_METRICS.specificEnergy) / BASELINE_METRICS.specificEnergy) * 100).toFixed(1)
   const roleDesc = ROLE_DEFS.find(r => r.key === currentRole)!
 
   const quickActions = [
@@ -53,11 +54,11 @@ export default function DashboardPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <div>
           <h1 className="page-title">
-            {me().name}，{dayjs().hour() < 12 ? '上午好' : dayjs().hour() < 18 ? '下午好' : '晚上好'}
+            {me().name}，{dayjs(dataTime).hour() < 12 ? '上午好' : dayjs(dataTime).hour() < 18 ? '下午好' : '晚上好'}
             <DemoTag />
           </h1>
           <div className="page-subtitle">
-            您的角色是「{roleOf()}」：{roleDesc.desc} —— {dayjs().format('YYYY年MM月DD日 dddd HH:mm')}
+            您的角色是「{roleOf()}」：{roleDesc.desc} —— 数据时刻 {dayjs(dataTime).format('YYYY年MM月DD日 HH:00')}（真实历史归档）
           </div>
         </div>
         <Space wrap>
@@ -84,8 +85,8 @@ export default function DashboardPage() {
         </Col>
         <Col xs={12} md={6}>
           <Card size="small">
-            <Statistic title="系统综合能效提升（AI 期 vs 基线）" value={6.3} suffix="%" precision={1} valueStyle={{ color: '#52c41a' }} />
-            <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>目标 ≥6% · 比功率 {AI_METRICS.specificEnergy} kWh/m³</div>
+            <Statistic title="系统比功率变化（近期 vs 基线）" value={energyDelta} suffix="%" precision={1} valueStyle={{ color: energyDelta <= 0 ? '#52c41a' : '#ff4d4f' }} />
+            <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>基线 {BASELINE_METRICS.specificEnergy} → 近期 {AI_METRICS.specificEnergy} kWh/m³（真实数据）</div>
           </Card>
         </Col>
       </Row>
@@ -194,7 +195,7 @@ export default function DashboardPage() {
       >
         <Input.TextArea
           rows={3} value={noteText} onChange={e => setNoteText(e.target.value)}
-          placeholder="填写处理备注（必填），例如：已通知仪表班检查 DR-01 露点变送器通讯"
+          placeholder="填写处理备注（必填），例如：已核对 4#/5# B 相电流采集通道，确认点表映射待修复"
         />
       </Modal>
     </div>

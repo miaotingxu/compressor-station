@@ -43,7 +43,7 @@ export default function OrganizationPage() {
   const tryDispatch = () => {
     // 越权演示：任何非 operator 角色点击都会被记录
     message.error('权限拒绝：控制指令下发仅限「值班员」角色。该越权尝试已写入审计日志。')
-    useApp.getState().addAudit('控制指令下发（越权尝试）', 'AC-01', `${useApp.getState().roleOf()} ${me().name} 在组织页尝试直接下发控制指令，系统拒绝`, 'denied')
+    useApp.getState().addAudit('控制指令下发（越权尝试）', 'AC-04', `${useApp.getState().roleOf()} ${me().name} 在组织页尝试直接下发控制指令，系统拒绝`, 'denied')
   }
 
   return (

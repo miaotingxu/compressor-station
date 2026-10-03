@@ -28,18 +28,18 @@ const SEARCH_INDEX = [
   { label: '运行管理 · 实时状态 / 告警', path: '/operation' },
   { label: '智能调度 · 方案生成与审批', path: '/scheduling' },
   { label: '执行中心 · 指令回执 / 异常处置', path: '/execution' },
-  { label: '设备健康 · 诊断 / 喘振风险 / 工单', path: '/health' },
+  { label: '设备健康 · 诊断 / 振动风险 / 工单', path: '/health' },
   { label: '能效与收益 · 指标 / 月度报告', path: '/energy' },
   { label: 'Agent 助手 · 自然语言问答', path: '/assistant' },
   { label: '数据与策略 · 数据质量 / 策略版本', path: '/data-strategy' },
   { label: '组织与审计 · 成员 / 操作日志', path: '/organization' },
-  { label: '方案 PLAN-20260919-001（已执行复盘）', path: '/execution' },
-  { label: '方案 PLAN-20260920-002（执行状态未知）', path: '/execution' },
-  { label: '工单 WO-20260920-002（AC-02 轴承检修）', path: '/health' },
-  { label: '工单 WO-20260921-003（AC-01 滤网）', path: '/health' },
-  { label: '诊断 DG-20260921-003（AC-01 喘振裕度）', path: '/health' },
-  { label: '告警 AL-20260921-003（AC-01 喘振）', path: '/operation' },
-  { label: '策略 V1.3.0 候选版本（待发布）', path: '/data-strategy' },
+  { label: '方案 PLAN-20260910-001（已执行复盘）', path: '/execution' },
+  { label: '方案 PLAN-20260911-002（执行状态未知）', path: '/execution' },
+  { label: '工单 WO-20260911-002（4# 冷却系统）', path: '/health' },
+  { label: '工单 WO-20260912-001（5# 振动核查）', path: '/health' },
+  { label: '诊断 DG-20260912-001（5# 二级振动）', path: '/health' },
+  { label: '告警 AL-20260912-001（5# 振动）', path: '/operation' },
+  { label: '策略 V1.2.0 候选版本（待发布）', path: '/data-strategy' },
   { label: '月度能效报告 RPT-202609', path: '/energy' },
 ]
 
@@ -66,7 +66,7 @@ export function AppLayout() {
     <Layout style={{ minHeight: '100vh' }}>
       <div className="demo-banner">
         <Tag color="gold" style={{ marginRight: 4 }}>演示环境</Tag>
-        <span>空压站多机协同智能调度 Agent · {SITE.factory} · {SITE.name} —— 所有数据为模拟数据，控制指令为模拟控制，用于完整业务流程演示</span>
+        <span>空压站多机协同智能调度 Agent · {SITE.factory} · {SITE.name} —— 运行数据来自主办方真实数据包，调度与控制流程为演示逻辑</span>
       </div>
       <Layout>
         <Layout.Sider theme="dark" collapsible collapsed={collapsed} trigger={null} width={216} style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
