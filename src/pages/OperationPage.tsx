@@ -9,14 +9,14 @@ import {
 } from '../components/common'
 import { LOAD_FORECAST } from '../data/timeseries'
 import { DIAGNOSES } from '../data/initial'
-import { windowEndingAt, isAtLatest } from '../data/stationTime'
+import { windowInterpolated, windowLive } from '../data/stationTime'
 import { STATION, LOAD } from '../data/stationConfig'
 import type { Alert, Device, RiskLevel } from '../types'
 import dayjs from 'dayjs'
 
 export default function OperationPage() {
   const nav = useNavigate()
-  const { devices, alerts, confirmAlert, alertToScheduling, alertToWorkorder, closeAlert, createWorkOrder, currentRole, me, dataTime, setDataTime, replayPlaying, toggleReplay } = useApp()
+  const { devices, alerts, confirmAlert, alertToScheduling, alertToWorkorder, closeAlert, createWorkOrder, currentRole, me, dataTime, setDataTime, live, toggleLive } = useApp()
   const [detail, setDetail] = useState<Device | null>(null)
   const [closeTarget, setCloseTarget] = useState<Alert | null>(null)
   const [closeConclusion, setCloseConclusion] = useState('')
@@ -27,17 +27,16 @@ export default function OperationPage() {
   const running = compressors.filter(d => d.status === 'running')
 
   const trendData = useMemo(() => {
-    const hours = range === '6h' ? 6 : range === '24h' ? 24 : 24 * 7
-    const step = range === '7d' ? 6 : 1
-    return windowEndingAt(dataTime, hours)
-      .filter((_, i) => i % step === 0)
-      .map(p => ({
-        time: range === '6h' || range === '24h' ? dayjs(p.time).format('HH:mm') : dayjs(p.time).format('MM-DD HH:mm'),
-        pressureBar: p.headerPressureBar,
-        totalFlow: p.totalFlow,
-        totalPowerKw: p.totalPowerKw,
-        avgLoadRate: Math.round(p.avgLoadRate),
-      }))
+    const src = range === '6h'
+      ? windowLive(dataTime, 6, 5)
+      : windowInterpolated(dataTime, range === '24h' ? 24 : 168, range === '24h' ? 20 : 120)
+    return src.map(p => ({
+      time: range === '7d' ? dayjs(p.time).format('MM-DD HH:mm') : dayjs(p.time).format('HH:mm'),
+      pressureBar: p.headerPressureBar,
+      totalFlow: p.totalFlow,
+      totalPowerKw: p.totalPowerKw,
+      avgLoadRate: Math.round(p.avgLoadRate),
+    }))
   }, [range, dataTime])
 
   const canHandle = currentRole === 'operator' || currentRole === 'device_engineer'
@@ -117,8 +116,8 @@ export default function OperationPage() {
 
   return (
     <div className="page-container">
-      <h1 className="page-title">运行管理 · {`${STATION.factory} · ${STATION.name}`}<DemoTag text="真实历史数据 · 支持时间轴回放" /></h1>
-      <div className="page-subtitle">站点总览、机组状态、趋势与告警处置。时间轴默认定位到数据末端（{STATION.rangeEnd.slice(0, 10)}），可拖动日期或播放历史回放，全站遥测随数据时刻同步。</div>
+      <h1 className="page-title">运行管理 · {STATION.name}<DemoTag text="实时数据驱动" /></h1>
+      <div className="page-subtitle">站点总览、机组状态、趋势与告警处置。遥测按分钟实时刷新，可暂停或跳转到指定时刻，全站数据随数据时刻同步。</div>
 
       <DemoAlertInline />
 
@@ -181,8 +180,8 @@ export default function OperationPage() {
             disabledDate={d => d.isBefore(dayjs(STATION.rangeStart).startOf('day')) || d.isAfter(dayjs(STATION.rangeEnd).endOf('day'))}
             onChange={d => d && setDataTime(d.format('YYYY-MM-DD HH:00:00'))}
           />
-          <Button size="small" icon={replayPlaying ? <PauseCircleOutlined /> : <PlayCircleOutlined />} onClick={toggleReplay}>{replayPlaying ? '暂停回放' : '历史回放'}</Button>
-          <Tag color={isAtLatest(dataTime) ? 'green' : 'blue'}>{isAtLatest(dataTime) ? '最新时段' : '历史回放中'}</Tag>
+          <Button size="small" type={live ? 'primary' : 'default'} icon={live ? <PauseCircleOutlined /> : <PlayCircleOutlined />} onClick={toggleLive}>{live ? '暂停实时' : '开启实时'}</Button>
+          <Tag color={live ? 'green' : 'default'}>{live ? '实时刷新中' : '已暂停'}</Tag>
           <Segmented size="small" value={range} onChange={v => setRange(v as typeof range)} options={['6h', '24h', '7d']} />
         </Space>
       }>运行趋势 · 时间轴 {dayjs(dataTime).format('MM-DD HH:00')}</SectionTitle>

@@ -167,6 +167,7 @@ export interface RealData {
   events: { time: string; device: string; to: 'running' | 'stop' }[]
   maint: { device: string; totalRunHours: number | null; totalLoadHours: number | null; nextMaintenanceDueHours: number | null }[]
   series: RealSeries
+  live: RealSeries
   points: RealPoint[]
   assets: RealAsset[]
 }

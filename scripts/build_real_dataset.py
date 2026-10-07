@@ -286,6 +286,32 @@ def main():
     }
     series = {"times": series_times, "devices": dev_series, "station": station_series}
 
+    # ---------- 实时驱动序列：末尾 24 小时分钟级（保留真实分钟波动） ----------
+    live_n = min(1440, len(dm))
+    live_times = [str(t) for t in dm["time"].tail(live_n)]
+    live_devices = {}
+    for num in (4, 5):
+        pre = f"{num}#"
+        live_devices[f"AC-{num:02d}"] = {
+            "loadRate": [r(v, 1) for v in dm[f"{pre}loadRate"].tail(live_n)],
+            "pressureBar": [r(v, 2) for v in dm[f"{pre}pressureBar"].tail(live_n)],
+            "flowM3Min": [r(v, 1) for v in dm[f"{pre}flow"].tail(live_n)],
+            "powerKw": [int(round(v)) for v in dm[f"{pre}power"].tail(live_n)],
+            "currentA": [r(v, 1) for v in dm[f"{pre}current"].tail(live_n)],
+            "vibration": [r(v, 2) for v in dm[f"{pre}vib"].tail(live_n)],
+            "windingTempC": [r(v, 1) for v in dm[f"{pre}winding"].tail(live_n)],
+            "bearingTempC": [r(v, 1) for v in dm[f"{pre}bearing"].tail(live_n)],
+            "oilPressureBar": [r(v, 2) for v in dm[f"{pre}oil"].tail(live_n)],
+            "running": [int(round(v)) for v in dm[f"{pre}run"].tail(live_n)],
+        }
+    live_station = {
+        "headerPressureBar": [r(v, 2) for v in m["headerBar"].tail(live_n)],
+        "totalFlow": [r(v, 1) for v in m["airflow"].tail(live_n)],
+        "totalPowerKw": [int(round(v)) for v in m["power"].tail(live_n)],
+        "avgLoadRate": [r((a + b) / 2, 1) for a, b in zip(dm["4#loadRate"].tail(live_n), dm["5#loadRate"].tail(live_n))],
+    }
+    live = {"times": live_times, "devices": live_devices, "station": live_station}
+
     # ---------- 基线 / 近期指标 ----------
     def agg(sub):
         return {
@@ -422,6 +448,7 @@ def main():
         "events": events[:500],
         "maint": maint_json,
         "series": series,
+        "live": live,
         "points": points,
         "assets": assets,
     }

@@ -11,7 +11,7 @@ import {
 } from '../data/initial'
 import { generateCandidates, flowAt, powerAt, specificPowerAt, optimalBand, peakDemand } from '../utils/scheduler'
 import { STATION } from '../data/stationConfig'
-import { sampleAt, clampToRange, type DeviceSample } from '../data/stationTime'
+import { sampleInterpolated, sampleLive, clampToRange, normalizeLiveTime, liveWindowStart, type DeviceSample } from '../data/stationTime'
 
 export const now = () => fmt(dayjs())
 
@@ -38,22 +38,22 @@ interface AppState {
   /** 模拟"高风险喘振"安全拦截开关：开启后阻断调度下发 */
   simulateSurgeBlock: boolean
   generating: boolean
-  /** 站点数据时间轴：当前定位到的真实数据时刻 */
+  /** 站点数据时间轴：当前定位到的数据时刻 */
   dataTime: string
-  /** 历史回放播放状态 */
-  replayPlaying: boolean
+  /** 实时驱动是否开启（按分钟推进并平滑插值） */
+  live: boolean
 
   switchRole: (r: RoleKey) => void
   me: () => Member
   roleOf: () => string
 
   refreshRealtime: () => void
-  /** 将时间轴定位到指定时刻，并同步设备遥测 */
+  /** 将时间轴定位到指定时刻，并同步设备遥测（会暂停实时驱动） */
   setDataTime: (t: string) => void
-  /** 播放 / 暂停历史回放 */
-  toggleReplay: () => void
-  /** 回放前进一步（1 小时） */
-  stepReplay: () => void
+  /** 开启 / 暂停实时驱动 */
+  toggleLive: () => void
+  /** 实时推进一步（1 分钟，平滑插值），到达末端回绕 */
+  tickLive: () => void
   toggleDataOutage: (v: boolean) => void
   toggleSurgeBlock: (v: boolean) => void
 
@@ -114,7 +114,7 @@ export const useApp = create<AppState>()(
   persist(
     (set, get) => ({
       currentRole: DEFAULT_ROLE,
-      devices: initialDevices(),
+      devices: applySamples(initialDevices(), sampleLive(liveWindowStart()).devices),
       alerts: ALERTS.map(a => ({ ...a })),
       plans: PLANS.map(p => ({ ...p, actions: p.actions.map(a => ({ ...a })) })),
       workOrders: WORK_ORDERS.map(w => ({ ...w, spareParts: w.spareParts.map(s => ({ ...s })), retestMetrics: w.retestMetrics.map(r => ({ ...r })) })),
@@ -127,8 +127,8 @@ export const useApp = create<AppState>()(
       simulateDataOutage: false,
       simulateSurgeBlock: false,
       generating: false,
-      dataTime: STATION.rangeEnd,
-      replayPlaying: false,
+      dataTime: liveWindowStart(),
+      live: true,
 
       switchRole: (r) => {
         const member = MEMBERS.find(m => m.role === r)!
@@ -140,26 +140,24 @@ export const useApp = create<AppState>()(
 
       refreshRealtime: () => {
         const { dataTime } = get()
-        const { devices } = sampleAt(dataTime)
+        const { devices } = sampleInterpolated(dataTime)
         set(s => ({ devices: applySamples(s.devices, devices) }))
       },
 
       setDataTime: (t) => {
         const tt = clampToRange(t)
-        const { devices } = sampleAt(tt)
-        set(s => ({ dataTime: tt, devices: applySamples(s.devices, devices) }))
+        const { devices } = sampleInterpolated(tt)
+        set(s => ({ dataTime: tt, live: false, devices: applySamples(s.devices, devices) }))
       },
 
-      toggleReplay: () => set(s => ({ replayPlaying: !s.replayPlaying })),
+      toggleLive: () => set(s => ({ live: !s.live })),
 
-      stepReplay: () => {
+      tickLive: () => {
         const s = get()
-        const next = dayjs(s.dataTime).add(1, 'hour')
-        if (next.isAfter(dayjs(STATION.rangeEnd))) {
-          set({ replayPlaying: false, dataTime: STATION.rangeEnd })
-          return
-        }
-        get().setDataTime(next.format('YYYY-MM-DD HH:mm:ss'))
+        const next = dayjs(s.dataTime).add(1, 'minute').format('YYYY-MM-DD HH:mm:ss')
+        const tt = normalizeLiveTime(next)
+        const { devices } = sampleLive(tt)
+        set(st => ({ dataTime: tt, devices: applySamples(st.devices, devices) }))
       },
 
       toggleDataOutage: (v) => {
@@ -457,10 +455,10 @@ export const useApp = create<AppState>()(
       clearChat: () => set({ chat: [] }),
     }),
     {
-      // v2：真实站点重构后更换 key，避免旧版 5 机组本地缓存污染
-      name: 'airpress-agent-store-v2',
+      // v3：实时驱动后不再持久化 devices（避免每秒写入 localStorage），并丢弃旧缓存
+      name: 'airpress-agent-store-v3',
       partialize: (s) => ({
-        currentRole: s.currentRole, devices: s.devices, alerts: s.alerts, plans: s.plans,
+        currentRole: s.currentRole, alerts: s.alerts, plans: s.plans,
         workOrders: s.workOrders, strategies: s.strategies, todos: s.todos, auditLogs: s.auditLogs,
         chat: s.chat, simulateDataOutage: s.simulateDataOutage, simulateSurgeBlock: s.simulateSurgeBlock,
       }),

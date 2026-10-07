@@ -31,13 +31,13 @@ const router = createBrowserRouter([
 ])
 
 export default function App() {
-  const replayPlaying = useApp(s => s.replayPlaying)
-  const stepReplay = useApp(s => s.stepReplay)
+  const live = useApp(s => s.live)
+  const tickLive = useApp(s => s.tickLive)
   useEffect(() => {
-    if (!replayPlaying) return
-    // 历史回放：每 1.5 秒前进 1 小时真实数据
-    const t = setInterval(stepReplay, 1500)
+    if (!live) return
+    // 实时驱动：每 1.5 秒在真实时序上前进 1 分钟并平滑插值
+    const t = setInterval(tickLive, 1500)
     return () => clearInterval(t)
-  }, [replayPlaying, stepReplay])
+  }, [live, tickLive])
   return <RouterProvider router={router} />
 }
